@@ -1,302 +1,336 @@
+/*****************************************************************************
+ *  Instituto de Informatica - Universidade Federal do Rio Grande do Sul     *
+ *  INF01142 - Sistemas Operacionais I N                                     *
+ *  Task 2 File System (T2FS) 2019/1                                         *
+ *                                                                           *
+ *  Authors: Yuri Jaschek                                                    *
+ *           Giovane Fonseca                                                 *
+ *           Humberto Lentz                                                  *
+ *           Matheus F. Kovaleski                                            *
+ *                                                                           *
+ *****************************************************************************/
+
+#ifndef T2FS_H
+#define T2FS_H
+
+#include <stdint.h>
 
 
-#ifndef __LIBT2FS___
-#define __LIBT2FS___
+/***********************************
+ *  Constant and type definitions  *
+ ***********************************/
 
-#define	SECTOR_SIZE	256
+#define T2FS_FILENAME_MAX     32
+#define T2FS_PATH_MAX       1024
 
+// Types of files in the file system
+enum filetype
+{
+    FILETYPE_INVALID = 0,
+    FILETYPE_REGULAR,
+    FILETYPE_DIRECTORY,
+    FILETYPE_SYMLINK,
+};
 
-#define	INVALID_PTR	-1
+typedef int32_t FILE2; // For regular files handles
+typedef int32_t DIR2;  // For directory handles
 
-typedef int FILE2;
-typedef int DIR2;
-
-typedef unsigned char BYTE;
-typedef unsigned short int WORD;
-typedef unsigned int DWORD;
-
-#pragma pack(push, 1)
-
-/** Registro com as informações da entrada de diretório, lida com readdir2 */
-#define MAX_FILE_NAME_SIZE 255
-typedef struct {
-    char    name[MAX_FILE_NAME_SIZE+1]; /* Nome do arquivo cuja entrada foi lida do disco      */
-    BYTE    fileType;                   /* Tipo do arquivo: regular (0x01) ou diretório (0x02) */
-    DWORD   fileSize;                   /* Numero de bytes do arquivo                          */
+// Record that holds directory entry information of a file, read with readdir2
+typedef struct
+{
+    char name[T2FS_FILENAME_MAX];   // Name of the file whose entry was read
+    uint8_t  fileType;  // Type of the file, according to enum filetype
+    uint32_t fileSize;  // Size of the file, in bytes
 } DIRENT2;
 
-#pragma pack(pop)
 
+/*************************************************
+ *  API functions declaration and documentation  *
+ *************************************************/
+
+/*
+ *   Some notes and conventions of expressions used:
+ *
+ * - filepath (or simply path) is any string that specifies a unique location
+ *     in the file system.
+ *   It can always be either relative or absolute for this T2FS version.
+ *
+ * - basename of a path is simply the file name, without any parent directory
+ *     in it. Example: "t2fs.c" is the basename of "/sisopT2/src/t2fs.c".
+ *
+ * - dirname is the opposite of the basename: the path without the file name.
+ *   Example: "." is the dirname of "t2fs.c" (because of relative path).
+ *
+ * - a path is valid if the dirname of the path exists and can be followed,
+ *     the file existing or not. Otherwise, the path is invalid.
+ *
+ * - a symbolic link (or symlink, soft link, or simply link) is a type of file
+ *     that contains the path to another file.
+ *   Since hard links are implemented through inode sharing, the expression
+ *     "link" will be used solely to refer to soft links in this context.
+ *
+ * - the meaning of "to resolve" a file or link can be thought of in two ways:
+ *   - to determine some path to a file that does not contain links, or
+ *   - to determine the file that is ultimately being pointed to by a link.
+ *   Some functions resolve links and some don't, depending on circumstances.
+ */
 
 /*-----------------------------------------------------------------------------
-Função: Usada para identificar os desenvolvedores do T2FS.
-	Essa função copia um string de identificação para o ponteiro indicado por "name".
-	Essa cópia não pode exceder o tamanho do buffer, informado pelo parâmetro "size".
-	O string deve ser formado apenas por caracteres ASCII (Valores entre 0x20 e 0x7A) e terminado por ‘\0’.
-	O string deve conter o nome e número do cartão dos participantes do grupo.
-
-Entra:	name -> buffer onde colocar o string de identificação.
-	size -> tamanho do buffer "name" (número máximo de bytes a serem copiados).
-
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-	Em caso de erro, será retornado um valor diferente de zero.
+Funct:  Copy the developers' identification to the given buffer.
+Input:  name -> Buffer to copy the information to
+        size -> Size of the buffer, not to be exceeded
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int identify2 (char *name, int size);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Formata um disco virtual
+Funct:  Logically format the partition 0 of the virtual 't2fs_disk.dat' disk to
+            be used with our T2FS file system, using data blocks size multiple
+            of the sector size.
+        't2fs_disk.dat' is expected to already have an MBR and a partition 0.
 
-Entra:	sectors_per_block -> tamanho de um bloco de dados em setores
+Input:  sectors_per_block -> Size of data block, in disk sectors
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-	Em caso de erro, será retornado um valor diferente de zero.
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
-int format2(int sectors_per_block);
+int format2 (int sectors_per_block);
 
 
 /*-----------------------------------------------------------------------------
-Função: Criar um novo arquivo.
-	O nome desse novo arquivo é aquele informado pelo parâmetro "filename".
-	O contador de posição do arquivo (current pointer) deve ser colocado na posição zero.
-	Caso já exista um arquivo ou diretório com o mesmo nome, a função deverá retornar um erro de criação.
-	A função deve retornar o identificador (handle) do arquivo.
-	Esse handle será usado em chamadas posteriores do sistema de arquivo para fins de manipulação do arquivo criado.
+Funct:  Create a new regular file, given its path.
+        If the path is invalid, it's an error.
+        This function also opens the file (see open2) and returns its handle.
+        If a file with the same name already exists, that one will have its
+            contents truncated to 0 and the file will be opened as normal.
 
-Entra:	filename -> nome do arquivo a ser criado.
+Input:  path -> Path to the file to be created and opened
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna o handle do arquivo (número positivo).
-	Em caso de erro, deve ser retornado um valor negativo.
+Return: On success, the file handle is returned (positive integer).
+        Otherwise, a negative value is returned.
 -----------------------------------------------------------------------------*/
-FILE2 create2 (char *filename);
+FILE2 create2 (char *path);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Apagar um arquivo do disco.
-	O nome do arquivo a ser apagado é aquele informado pelo parâmetro "filename".
+Funct:  Delete an existing regular or link file, given its path.
+        If the file doesn't exist, it's an error.
+        This function will delete a link, if given one, and not the file the
+            link resolves to.
 
-Entra:	filename -> nome do arquivo a ser apagado.
+Input:  path -> Path to the file to be deleted
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-	Em caso de erro, será retornado um valor diferente de zero.
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
-int delete2 (char *filename);
+int delete2 (char *path);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Abre um arquivo existente no disco.
-	O nome desse novo arquivo é aquele informado pelo parâmetro "filename".
-	Ao abrir um arquivo, o contador de posição do arquivo (current pointer) deve ser colocado na posição zero.
-	A função deve retornar o identificador (handle) do arquivo.
-	Esse handle será usado em chamadas posteriores do sistema de arquivo para fins de manipulação do arquivo criado.
-	Todos os arquivos abertos por esta chamada são abertos em leitura e em escrita.
-	O ponto em que a leitura, ou escrita, será realizada é fornecido pelo valor current_pointer (ver função seek2).
+Funct:  Open an existing regular file, given its path.
+        The opened file can then be the target of other functions through the
+            returned handle, namely: close2, read2, write2, truncate2, seek2.
+        If given a link, the link is resolved to the actual file.
+        If the file doesn't exist, or if a link has been given and it cannot be
+            resolved to an existing regular file, it's an error.
+        Once opened, the current position for operations on the file will be 0.
 
-Entra:	filename -> nome do arquivo a ser apagado.
+Input:  path -> Path to the file to be opened
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna o handle do arquivo (número positivo)
-	Em caso de erro, deve ser retornado um valor negativo
+Return: On success, the file handle is returned (positive integer).
+        Otherwise, a negative value is returned.
 -----------------------------------------------------------------------------*/
-FILE2 open2 (char *filename);
+FILE2 open2 (char *path);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Fecha o arquivo identificado pelo parâmetro "handle".
+Funct:  Close an opened regular file, given its handle.
+        The closed file will no longer be able to be operated upon until it's
+            opened again.
+        If the handle is invalid, it's an error.
 
-Entra:	handle -> identificador do arquivo a ser fechado
+Input:  handle -> Identifier of the opened file to be closed
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-	Em caso de erro, será retornado um valor diferente de zero.
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int close2 (FILE2 handle);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Realiza a leitura de "size" bytes do arquivo identificado por "handle".
-	Os bytes lidos são colocados na área apontada por "buffer".
-	Após a leitura, o contador de posição (current pointer) deve ser ajustado para o byte seguinte ao último lido.
+Funct:  Read bytes from an opened regular file into a buffer.
+        The current position on the file is adjusted to the following byte of
+            the last byte read.
+        If the handle is invalid, or if size is negative, it's an error.
 
-Entra:	handle -> identificador do arquivo a ser lido
-	buffer -> buffer onde colocar os bytes lidos do arquivo
-	size -> número de bytes a serem lidos
+Input:  handle -> Identifier of the opened file to be read from
+        buffer -> Buffer to store the read data
+        size   -> Number of bytes to be read
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna o número de bytes lidos.
-	Se o valor retornado for menor do que "size", então o contador de posição atingiu o final do arquivo.
-	Em caso de erro, será retornado um valor negativo.
+Return: On success, the number of bytes effectively read is returned.
+        Otherwise, a negative value is returned.
 -----------------------------------------------------------------------------*/
 int read2 (FILE2 handle, char *buffer, int size);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Realiza a escrita de "size" bytes no arquivo identificado por "handle".
-	Os bytes a serem escritos estão na área apontada por "buffer".
-	Após a escrita, o contador de posição (current pointer) deve ser ajustado para o byte seguinte ao último escrito.
+Funct:  Write bytes to an opened regular file from a buffer.
+        The current position on the file is adjusted to the following byte of
+            the last byte written.
+        If the handle is invalid, or if size is negative, it's an error.
 
-Entra:	handle -> identificador do arquivo a ser escrito
-	buffer -> buffer de onde pegar os bytes a serem escritos no arquivo
-	size -> número de bytes a serem escritos
+Input:  handle -> Identifier of the opened file to be written to
+        buffer -> Buffer that stores the data to be written
+        size   -> Number of bytes to be written
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna o número de bytes efetivamente escritos.
-	Em caso de erro, será retornado um valor negativo.
+Return: On success, the number of bytes effectively written is returned.
+        Otherwise, a negative value is returned.
 -----------------------------------------------------------------------------*/
 int write2 (FILE2 handle, char *buffer, int size);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Função usada para truncar um arquivo.
-	Remove do arquivo todos os bytes a partir da posição atual do contador de posição (CP)
-	Todos os bytes a partir da posição CP (inclusive) serão removidos do arquivo.
-	Após a operação, o arquivo deverá contar com CP bytes e o ponteiro estará no final do arquivo
+Funct:  Truncate an opened regular file to its current position.
+        This function discards all bytes from (and including) the current
+            position up to the end of file. The current position becomes, then,
+            the end of file.
+        If the handle is invalid, it's an error.
 
-Entra:	handle -> identificador do arquivo a ser truncado
+Input:  handle -> Identifier of the opened file to be truncated
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-	Em caso de erro, será retornado um valor diferente de zero.
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int truncate2 (FILE2 handle);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Reposiciona o contador de posições (current pointer) do arquivo identificado por "handle".
-	A nova posição é determinada pelo parâmetro "offset".
-	O parâmetro "offset" corresponde ao deslocamento, em bytes, contados a partir do início do arquivo.
-	Se o valor de "offset" for "-1", o current_pointer deverá ser posicionado no byte seguinte ao final do arquivo,
-		Isso é útil para permitir que novos dados sejam adicionados no final de um arquivo já existente.
+Funct:  Reposition the current position (CP) of an opened regular file.
+        The position is counted from the beginning of the file, in bytes, and
+            it cannot surpass the size of the file.
+        The only negative value accepted is -1, which corresponds to EOF.
+        If the handle is invalid, it's an error.
 
-Entra:	handle -> identificador do arquivo a ser escrito
-	offset -> deslocamento, em bytes, onde posicionar o "current pointer".
+Input:  handle -> Identifier of the opened file to have its CP repositioned
+        offset -> New position for CP
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-	Em caso de erro, será retornado um valor diferente de zero.
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
-int seek2 (FILE2 handle, DWORD offset);
+int seek2 (FILE2 handle, uint32_t offset);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Criar um novo diretório.
-	O caminho desse novo diretório é aquele informado pelo parâmetro "pathname".
-		O caminho pode ser ser absoluto ou relativo.
-	São considerados erros de criação quaisquer situações em que o diretório não possa ser criado.
-		Isso inclui a existência de um arquivo ou diretório com o mesmo "pathname".
+Funct:  Create a new directory, given its path.
+        If a file with the same name already exists, or the path is invalid,
+            it is an error.
 
-Entra:	pathname -> caminho do diretório a ser criado
+Input:  filename -> Path to the directory to be created
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-	Em caso de erro, será retornado um valor diferente de zero.
+Return: On success, the file handle is returned (positive integer).
+        Otherwise, a negative value is returned.
+
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
-int mkdir2 (char *pathname);
+int mkdir2 (char *path);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Apagar um subdiretório do disco.
-	O caminho do diretório a ser apagado é aquele informado pelo parâmetro "pathname".
-	São considerados erros quaisquer situações que impeçam a operação.
-		Isso inclui:
-			(a) o diretório a ser removido não está vazio;
-			(b) "pathname" não existente;
-			(c) algum dos componentes do "pathname" não existe (caminho inválido);
-			(d) o "pathname" indicado não é um arquivo;
+Funct:  Delete an existing directory, given its path.
+        If the directory doesn't exist, or if it's not empty, it's an error.
+        This function only accepts directories. The user cannot delete a
+            directory through a link.
 
-Entra:	pathname -> caminho do diretório a ser criado
+Input:  path -> Path to the directory to be deleted
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-	Em caso de erro, será retornado um valor diferente de zero.
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
-int rmdir2 (char *pathname);
+int rmdir2 (char *path);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Altera o diretório atual de trabalho (working directory).
-		O caminho desse diretório é informado no parâmetro "pathname".
-		São considerados erros:
-			(a) qualquer situação que impeça a realização da operação
-			(b) não existência do "pathname" informado.
+Funct:  Change the current working directory (CWD) to the given path.
+        If the path can't be resolved to an existing directory, it's an error.
 
-Entra:	pathname -> caminho do novo diretório de trabalho.
+Input:  path -> The path to the new CWD
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-		Em caso de erro, será retornado um valor diferente de zero.
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
-int chdir2 (char *pathname);
+int chdir2 (char *path);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Informa o diretório atual de trabalho.
-		O "pathname" do diretório de trabalho deve ser copiado para o buffer indicado por "pathname".
-			Essa cópia não pode exceder o tamanho do buffer, informado pelo parâmetro "size".
-		São considerados erros:
-			(a) quaisquer situações que impeçam a realização da operação
-			(b) espaço insuficiente no buffer "pathname", cujo tamanho está informado por "size".
+Funct:  Copy the absolute path of the CWD to the given buffer.
 
-Entra:	pathname -> buffer para onde copiar o pathname do diretório de trabalho
-		size -> tamanho do buffer pathname
+Input:  path -> Buffer to copy the information to
+        size -> Size of the buffer, not to be exceeded
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-		Em caso de erro, será retornado um valor diferente de zero.
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
-int getcwd2 (char *pathname, int size);
+int getcwd2 (char *path, int size);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Abre um diretório existente no disco.
-	O caminho desse diretório é aquele informado pelo parâmetro "pathname".
-	Se a operação foi realizada com sucesso, a função:
-		(a) deve retornar o identificador (handle) do diretório
-		(b) deve posicionar o ponteiro de entradas (current entry) na primeira posição válida do diretório "pathname".
-	O handle retornado será usado em chamadas posteriores do sistema de arquivo para fins de manipulação do diretório.
+Funct:  Open an existing directory, given its path.
+        The opened directory can then be the target of other functions through
+            the returned handle, namely: readdir2, closedir2.
+        If given a link, the link is resolved to the actual file.
+        If the directory doesn't exist, or if a link has been given and it
+            cannot be resolved to an existing directory, it's an error.
+        Once opened, the current entry for readdir2 operations on the directory
+            will be the entry 0.
 
-Entra:	pathname -> caminho do diretório a ser aberto
+Input:  path -> Path to the directory to be opened
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna o identificador do diretório (handle).
-	Em caso de erro, será retornado um valor negativo.
+Return: On success, the directory handle is returned (positive integer).
+        Otherwise, a negative value is returned.
 -----------------------------------------------------------------------------*/
-DIR2 opendir2 (char *pathname);
+DIR2 opendir2 (char *path);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Realiza a leitura das entradas do diretório identificado por "handle".
-	A cada chamada da função é lida a entrada seguinte do diretório representado pelo identificador "handle".
-	Algumas das informações dessas entradas devem ser colocadas no parâmetro "dentry".
-	Após realizada a leitura de uma entrada, o ponteiro de entradas (current entry) deve ser ajustado para a próxima entrada válida, seguinte à última lida.
-	São considerados erros:
-		(a) qualquer situação que impeça a realização da operação
-		(b) término das entradas válidas do diretório identificado por "handle".
+Funct:  Fill the directory entry structure with information of the next valid
+            entry in the directory, given its handle.
+        To read all directory entries, this function must be called multiple
+            times, until there is no entry left, at which point the entry
+            position will always stay at EOF and an error will be returned.
+        If the handle is invalid or if there are no more entries to be read,
+            it's an error.
 
-Entra:	handle -> identificador do diretório cujas entradas deseja-se ler.
-	dentry -> estrutura de dados onde a função coloca as informações da entrada lida.
+Input:  handle -> Identifier of the opened directory to read entries from
+        dentry -> Directory entry structure to be filled
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-	Em caso de erro, será retornado um valor diferente de zero ( e "dentry" não será válido)
+Return: On success, 0 is returned.
+        Otherwise, a non-zero value is returned and dentry will be invalid.
 -----------------------------------------------------------------------------*/
 int readdir2 (DIR2 handle, DIRENT2 *dentry);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Fecha o diretório identificado pelo parâmetro "handle".
+Funct:  Close an opened directory, given its handle.
+        The closed directory will no longer be able to be operated upon until
+            it's opened again.
+        If the handle is invalid, it's an error.
 
-Entra:	handle -> identificador do diretório que se deseja fechar (encerrar a operação).
+Input:  handle -> Identifier of the opened directory to be closed
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-	Em caso de erro, será retornado um valor diferente de zero.
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int closedir2 (DIR2 handle);
 
 
 /*-----------------------------------------------------------------------------
-Função:	Cria um link simbólico
+Funct:  Create a symbolic link file, given its path and what it points to.
+        This function does not verify if the file it points to exists, or even
+            if it's a valid path. It's the user's responsibility.
+        This function only creates the given 'linkpath' file, if it can, and
+            copies the given 'pointpath' string as its contents.
+        If the given linkpath is invalid, or if linkpath exists and it's a
+            regular or directory file, it's an error. If it's a link, then its
+            contents will be overwritten by the new 'pointpath' provided.
 
-Entra:	linkname -> nome do link
-		filename -> nome do arquivo apontado pelo link
+Input:  linkpath  -> Path of where the link should be created
+        pointpath -> Path that the link should point to
 
-Saída:	Se a operação foi realizada com sucesso, a função retorna "0" (zero).
-	Em caso de erro, será retornado um valor diferente de zero.
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
-int ln2(char *linkname, char *filename);
+int ln2 (char *linkpath, char *pointpath);
 
 
-
-
-
-
-
-#endif
+#endif // T2FS_H

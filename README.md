@@ -51,5 +51,5 @@ By:
 
 - Yuri Jaschek <<yuri.jaschek@inf.ufrgs.br>>
 - Giovane Fonseca
-- Humberto Sagave
+- Humberto Lentz
 - Matheus F. Kovaleski
