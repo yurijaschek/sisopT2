@@ -6,7 +6,7 @@ static char filename[] = "t2fs_disk.dat";
 
 int read_sector(unsigned int sector, unsigned char *buffer)
 {
-    FILE *fp = fopen(filename, "r");
+    FILE *fp = fopen(filename, "r+b");
     if(!fp)
         return -1;
     int res = fseek(fp, sector*SECTOR_SIZE, SEEK_SET);
@@ -22,7 +22,7 @@ int read_sector(unsigned int sector, unsigned char *buffer)
 
 int write_sector (unsigned int sector, unsigned char *buffer)
 {
-    FILE *fp = fopen(filename, "w");
+    FILE *fp = fopen(filename, "r+b");
     if(!fp)
         return -1;
     int res = fseek(fp, sector*SECTOR_SIZE, SEEK_SET);
