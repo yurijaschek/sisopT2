@@ -87,8 +87,6 @@ static u32 calculate_num_blocks(u32 sectors_per_block, u32 sectors_available)
 Funct:  Setup structures for the file system on the disk.
         The given superblock must be already initialized and valid.
         The structures offsets will be those in the superblock.
-        The file system will only have the root ('/') directory created, with
-            inode 1, and using the first available block (1). (0 means unused).
 Input:  sblock -> Pointer to the superblock with the partition information
 Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
@@ -97,7 +95,7 @@ static int setup_structures(struct t2fs_superblock *sblock)
     print_superblock(sblock);
     int res = 0 ;
 
-    memset(sector_buffer, 0, SECTOR_SIZE); // Clean sector for table and bitmaps
+    memset(sector_buffer, 0, SECTOR_SIZE); // Clean sector for the structures
     u32 first = sblock->first_sector + sblock->it_offset;
     u32 last  = sblock->first_sector + sblock->blocks_offset; // Not included
 
@@ -109,11 +107,10 @@ static int setup_structures(struct t2fs_superblock *sblock)
     }
 
     memcpy(sector_buffer, sblock, sizeof(*sblock));
+    // Write the superblock, the rest of the sector filled with 0
     res = write_sector(sblock->first_sector, sector_buffer);
     if(res != 0)
         return res;
-
-    // TODO: Create the root ('/') directory at inode 1
 
     return 0;
 }
@@ -126,10 +123,7 @@ static int setup_structures(struct t2fs_superblock *sblock)
 /*-----------------------------------------------------------------------------
 Funct:  Format the specified partition of "t2fs_disk.dat".
         It reserves space for each of the internal structures needed, namely:
-            (a) superblock;
-            (b) inodes table;
-            (c) inodes bitmap; and
-            (d) blocks bitmap.
+            superblock, inodes table, inodes bitmap and blocks bitmap.
         All the necessary information is stored in the partition's superblock,
             and the internal structures are initialized accordingly.
         The number of inodes, which DOES NOT CHANGE unless the partition is
@@ -137,6 +131,8 @@ Funct:  Format the specified partition of "t2fs_disk.dat".
             the inodes table, which will be roughly 1% of the total number of
             sectors in the partition.
         The partition must have a size of at least 4 sectors + 1 logical block.
+        The file system will only have the root ('/') directory created, with
+            inode 1, and using the first available block (1). (0 means unused).
         After formatting, init_t2fs must be called at some point before any
             internal function.
 Input:  sectors_per_block -> Number of disk sectors in a logical block,
@@ -158,7 +154,7 @@ int init_format(int sectors_per_block, int partition)
     u32 first_sector = mbr.ptable[partition].first_sector;
     u32 last_sector  = mbr.ptable[partition].last_sector;
 
-    if(first_sector > last_sector)
+    if(first_sector > last_sector) // MBR could be corrupted
         return -1;
 
     u32 num_sectors = last_sector - first_sector + 1;
@@ -174,13 +170,14 @@ int init_format(int sectors_per_block, int partition)
 
     u32 num_inodes = it_sectors * (SECTOR_SIZE / sizeof(struct t2fs_inode));
     // Sectors for inodes bitmap
-    u32 ib_sectors = 1 + num_inodes / (8*SECTOR_SIZE); // Inodes counting start at 1
+    u32 ib_sectors = 1 + num_inodes / (8*SECTOR_SIZE); // Inodes start at 1
     remaining -= ib_sectors;
 
     u32 num_blocks = calculate_num_blocks(sectors_per_block, remaining);
     // Sectors for blocks bitmap
-    u32 bb_sectors = 1 + num_blocks / (8*SECTOR_SIZE); // Blocks counting start at 1
+    u32 bb_sectors = 1 + num_blocks / (8*SECTOR_SIZE); // Blocks start at 1
 
+    // Create our superblock to pass to the setup_structures function
     struct t2fs_superblock sblock =
     {
         .sectors_per_block = sectors_per_block,
@@ -195,9 +192,12 @@ int init_format(int sectors_per_block, int partition)
         .blocks_offset = 1U + it_sectors + ib_sectors + bb_sectors,
     };
 
+    // Will initialize the structures on the disk
     res = setup_structures(&sblock);
     if(res != 0)
         return res;
+
+    // TODO: Create the root ('/') directory at inode 1 and block 1
 
     init_done = false;
     return 0;
@@ -226,12 +226,15 @@ int init_t2fs(int partition)
     if(partition >= mbr.pt_entries) // Invalid partition to initialize
         return -1;
 
-    res = read_sector(mbr.ptable[partition].first_sector, sector_buffer); // Read superblock sector
+    // Read superblock sector
+    res = read_sector(mbr.ptable[partition].first_sector, sector_buffer);
     if(res != 0)
         return res;
 
-    superblock = *((struct t2fs_superblock*)sector_buffer); // Copy the superblock
-    if(strcmp(superblock.signature, T2FS_SIGNATURE) != 0) // Make sure it's our "magic string"
+    // Copy the superblock
+    superblock = *((struct t2fs_superblock*)sector_buffer);
+    // Make sure it's our "magic string"
+    if(strcmp(superblock.signature, T2FS_SIGNATURE) != 0)
         return -1;
 
     init_done = true;
