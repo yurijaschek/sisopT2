@@ -55,6 +55,14 @@ typedef uint64_t u64;
 
 #pragma pack(push, 1) // Alignment is to be avoided for structures stored on disk
 
+// Partition table entry
+struct t2fs_partition
+{
+    u32 first_sector;   // First valid sector of the partition
+    u32 last_sector;    // Last valid sector of the partition
+    char name[24];      // Name of the partition
+};
+
 // Master Boot Record structure
 struct t2fs_mbr
 {
@@ -62,27 +70,22 @@ struct t2fs_mbr
     u16 sector_size;    // 0x0100 (256 bytes)
     u16 pt_offset;      // Partition table offset: 0x08 (8 bytes)
     u16 pt_entries;     // Partition table entries: 0x04 (4 partitions)
-    struct
-    {
-        u32 first_sector;
-        u32 last_sector;
-        char name[24];
-    } partition_table[4];   // Partition table (with 4 entries)
+    struct t2fs_partition ptable[4]; // Partition table (with 4 entries)
 };
 
 // Superblock of our file system partition
 struct t2fs_superblock
 {
-    u8   sectors_per_block;     // Number of disk sectors per logical data block
-    char signature[15];         // To be certain that this partition was formatted by us
-    u32  first_sector;          // First sector of the partition (where the superblock is)
-    u32  num_sectors;           // Number of disk sectors this partition has
-    u32  num_blocks;            // Number of logical data blocks
-    u32  num_inodes;            // Number of inodes
-    u32  inodes_table_offset;   // Sector offset of the inodes table
-    u32  inodes_bitmap_offset;  // Sector offset of the inodes bitmap
-    u32  blocks_bitmap_offset;  // Sector offset of the blocks bitmap
-    u32  data_blocks_offset;    // Sector offset of the logical blocks
+    u8   sectors_per_block; // Number of disk sectors per logical data block
+    char signature[15];     // To be certain that this partition was formatted by us
+    u32  first_sector;      // First sector of the partition (where the superblock is)
+    u32  num_sectors;       // Number of disk sectors this partition has
+    u32  num_blocks;        // Number of logical data blocks
+    u32  num_inodes;        // Number of inodes
+    u32  it_offset;         // Sector offset of the inodes table
+    u32  ib_offset;         // Sector offset of the inodes bitmap
+    u32  bb_offset;         // Sector offset of the blocks bitmap
+    u32  blocks_offset;     // Sector offset of the logical blocks
 };
 
 // Index node, which stores information about files
@@ -134,9 +137,14 @@ struct t2fs_path
 
 // allocation.c
 
+// debug.c
+void print_superblock(struct t2fs_superblock *sblock);
+
 // descriptor.c
 
 // init.c
+int init_format(int sectors_per_block, int partition);
+int init_t2fs(int partition);
 
 // path.c
 
@@ -147,6 +155,7 @@ struct t2fs_path
  *  Shared variables between sources  *
  **************************************/
 
+extern struct t2fs_superblock superblock; // To hold file system management information
 
 
 #endif // LIBT2FS_H
