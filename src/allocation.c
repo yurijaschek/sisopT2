@@ -44,7 +44,7 @@ static int operate_bitmap(u32 number, bool inode, int operation)
     int bit = number % 8;
 
     byte_t data;
-    if(t2fs_read_sector(&data, sector, byte, 1) != 1)
+    if(t2fs_read_sector(&data, sector, byte, 1) != 0)
         return -1;
 
     if(operation == -1) // Check
@@ -55,7 +55,7 @@ static int operate_bitmap(u32 number, bool inode, int operation)
     else // Set (operation == 1)
         SET_BIT(data, bit);
 
-    if(t2fs_write_sector(&data, sector, byte, 1) != 1)
+    if(t2fs_write_sector(&data, sector, byte, 1) != 0)
         return -1;
 
     return 0;
@@ -119,7 +119,7 @@ int read_inode(u32 inode, struct t2fs_inode *data)
 
     int res = t2fs_read_sector((byte_t*)data, sector, byte,
                                sizeof(struct t2fs_inode));
-    if(res != sizeof(struct t2fs_inode))
+    if(res != 0)
         return -1;
 
     return 0;
@@ -143,7 +143,7 @@ int write_inode(u32 inode, struct t2fs_inode *data)
 
     int res = t2fs_write_sector((byte_t*)data, sector, byte,
                                 sizeof(struct t2fs_inode));
-    if(res != sizeof(struct t2fs_inode))
+    if(res != 0)
         return -1;
 
     return 0;

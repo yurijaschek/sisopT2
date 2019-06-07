@@ -89,6 +89,10 @@ int format2 (int sectors_per_block)
     if(res != 0)
         return res;
 
+    res = init_t2fs(partition);
+    if(res != 0)
+        return res;
+
     u32 root_inode = use_new_inode(FILETYPE_DIRECTORY);
     if(root_inode != 1U) // The root directory must be at inode 1
         return -1;

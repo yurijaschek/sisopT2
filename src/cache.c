@@ -40,6 +40,8 @@ Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int t2fs_read_sector(byte_t *data, u32 sector, int offset, int size)
 {
+    if(offset + size > SECTOR_SIZE)
+        return -1;
     sector += superblock.first_sector;
     int res = read_sector(sector, sector_buffer);
     if(res != 0)
@@ -59,6 +61,8 @@ Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int t2fs_write_sector(byte_t *data, u32 sector, int offset, int size)
 {
+    if(offset + size > SECTOR_SIZE)
+        return -1;
     sector += superblock.first_sector;
     int res = read_sector(sector, sector_buffer);
     if(res != 0)
