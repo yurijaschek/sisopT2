@@ -28,6 +28,10 @@
 
 #define ARRAY_SIZE(x) (int)(sizeof(x) / sizeof((x)[0]))
 
+#define CHK_BIT(x,i) ((x) &   (1<<(i)))
+#define SET_BIT(x,i) ((x) |=  (1<<(i)))
+#define CLR_BIT(x,i) ((x) &= ~(1<<(i)))
+
 
 /***********************************
  *  Constant and type definitions  *
@@ -93,7 +97,6 @@ struct t2fs_inode
 {
     u8  type;           // Type of the file (regular, directory etc)
     u8  hl_count;       // Number of hard links that have this inode
-    u8  reserved[2];    // Reserved bytes for future use
     u32 bytes_size;     // Size of the file, in bytes
     u32 direct_ptr[NUM_DIRECT_PTR]; // Direct pointers to blocks
     u32 singly_ptr;     // Singly indirect pointer
@@ -136,9 +139,9 @@ struct t2fs_path
  ************************************/
 
 // allocation.c
-
-// debug.c
-void print_superblock(struct t2fs_superblock *sblock);
+int read_inode(u32 inode, struct t2fs_inode *data);
+int write_inode(u32 inode, struct t2fs_inode *data);
+u32 use_new_inode(u8 type);
 
 // descriptor.c
 
@@ -149,6 +152,9 @@ int init_t2fs(int partition);
 // path.c
 
 // structure.c
+
+// t2fs.c
+void print_superblock(struct t2fs_superblock *sblock);
 
 
 /**************************************
