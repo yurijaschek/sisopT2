@@ -46,6 +46,7 @@ void print_superblock(struct t2fs_superblock *sblock)
  ************************************/
 
 struct t2fs_superblock superblock;
+u32 cwd_inode = 1;
 
 
 /************************
@@ -100,12 +101,15 @@ int format2 (int sectors_per_block)
     if(res != 0)
         return res;
 
+    cwd_inode = root_inode;
+
     return 0;
 }
 
 
 FILE2 create2 (char *path)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)path;
     return -1;
 }
@@ -113,6 +117,7 @@ FILE2 create2 (char *path)
 
 int delete2 (char *path)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)path;
     return -1;
 }
@@ -120,6 +125,7 @@ int delete2 (char *path)
 
 FILE2 open2 (char *path)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)path;
     return -1;
 }
@@ -127,6 +133,7 @@ FILE2 open2 (char *path)
 
 int close2 (FILE2 handle)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     return -1;
 }
@@ -134,6 +141,7 @@ int close2 (FILE2 handle)
 
 int read2 (FILE2 handle, char *buffer, int size)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     (void)buffer;
     (void)size;
@@ -143,6 +151,7 @@ int read2 (FILE2 handle, char *buffer, int size)
 
 int write2 (FILE2 handle, char *buffer, int size)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     (void)buffer;
     (void)size;
@@ -152,6 +161,7 @@ int write2 (FILE2 handle, char *buffer, int size)
 
 int truncate2 (FILE2 handle)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     return -1;
 }
@@ -159,6 +169,7 @@ int truncate2 (FILE2 handle)
 
 int seek2 (FILE2 handle, uint32_t offset)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     (void)offset;
     return -1;
@@ -167,6 +178,7 @@ int seek2 (FILE2 handle, uint32_t offset)
 
 int mkdir2 (char *path)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)path;
     return -1;
 }
@@ -174,6 +186,7 @@ int mkdir2 (char *path)
 
 int rmdir2 (char *path)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)path;
     return -1;
 }
@@ -181,6 +194,7 @@ int rmdir2 (char *path)
 
 int chdir2 (char *path)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)path;
     return -1;
 }
@@ -188,6 +202,7 @@ int chdir2 (char *path)
 
 int getcwd2 (char *path, int size)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)path;
     (void)size;
     return -1;
@@ -196,6 +211,7 @@ int getcwd2 (char *path, int size)
 
 DIR2 opendir2 (char *path)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)path;
     return -1;
 }
@@ -203,6 +219,7 @@ DIR2 opendir2 (char *path)
 
 int readdir2 (DIR2 handle, DIRENT2 *dentry)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     (void)dentry;
     return -1;
@@ -211,6 +228,7 @@ int readdir2 (DIR2 handle, DIRENT2 *dentry)
 
 int closedir2 (DIR2 handle)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     return -1;
 }
@@ -218,6 +236,7 @@ int closedir2 (DIR2 handle)
 
 int ln2 (char *linkpath, char *pointpath)
 {
+    if(init_t2fs(partition) != 0) return -1;
     (void)linkpath;
     (void)pointpath;
     return -1;

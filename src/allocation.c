@@ -110,11 +110,15 @@ Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int read_inode(u32 inode, struct t2fs_inode *data)
 {
+    if(inode < 1 || inode >= superblock.num_inodes)
+        return -1;
+
     u32 sector;
     int byte;
     calculate_inode_table(inode, &sector, &byte);
 
-    int res = t2fs_read_sector(data, sector, byte, sizeof(struct t2fs_inode));
+    int res = t2fs_read_sector((byte_t*)data, sector, byte,
+                               sizeof(struct t2fs_inode));
     if(res != sizeof(struct t2fs_inode))
         return -1;
 
@@ -130,11 +134,15 @@ Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int write_inode(u32 inode, struct t2fs_inode *data)
 {
+    if(inode < 1 || inode >= superblock.num_inodes)
+        return -1;
+
     u32 sector;
     int byte;
     calculate_inode_table(inode, &sector, &byte);
 
-    int res = t2fs_write_sector(data, sector, byte, sizeof(struct t2fs_inode));
+    int res = t2fs_write_sector((byte_t*)data, sector, byte,
+                                sizeof(struct t2fs_inode));
     if(res != sizeof(struct t2fs_inode))
         return -1;
 
