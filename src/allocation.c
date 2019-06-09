@@ -71,7 +71,7 @@ Return: On success, returns the first inode/block found (positive integer).
 static u32 first_free(bool inode)
 {
     u32 num = inode ? superblock.num_inodes : superblock.num_blocks;
-    for(u32 i=1; i<num; i++)
+    for(u32 i=1U; i<num; i++)
     {
         // If operate_bitmap returns an error (-1), the if will be false
         // It is safer to not use it in case of error
@@ -110,7 +110,7 @@ Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int read_inode(u32 inode, struct t2fs_inode *data)
 {
-    if(inode < 1 || inode >= superblock.num_inodes)
+    if(inode == 0 || inode >= superblock.num_inodes)
         return -1;
 
     u32 sector;
@@ -134,7 +134,7 @@ Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int write_inode(u32 inode, struct t2fs_inode *data)
 {
-    if(inode < 1 || inode >= superblock.num_inodes)
+    if(inode == 0 || inode >= superblock.num_inodes)
         return -1;
 
     u32 sector;

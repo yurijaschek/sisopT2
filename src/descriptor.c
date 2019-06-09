@@ -15,4 +15,3 @@
  */
 
 #include "libt2fs.h"
-

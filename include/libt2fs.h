@@ -37,7 +37,8 @@
  ***********************************/
 
 #define NUM_DIRECT_PTR 3 // Number of direct block pointers in inode
-#define T2FS_SIGNATURE "os_sisopeiros" // Magic string in the superblock
+#define T2FS_SIGNATURE "os sisopeiros" // Magic string in the superblock
+#define ROOT_INODE 1U
 
 typedef uint8_t byte_t;
 
@@ -96,7 +97,7 @@ struct t2fs_superblock
 struct t2fs_inode
 {
     u8  type;       // Type of the file (regular, directory etc)
-    u8  hl_count;   // Number of hard links that have this inode
+    u32 hl_count;   // Number of hard links that have this inode
     u32 bytes_size; // Size of the file, in bytes
     u32 direct_ptr[NUM_DIRECT_PTR]; // Direct pointers to blocks
     u32 singly_ptr; // Singly indirect pointer
@@ -127,7 +128,7 @@ struct t2fs_path
     bool valid;     // Indicates whether the path to the file is valid or not
     bool exists;    // Indicates whether the file already exists or not
     u8   type;      // The file type, if it exists, according to enum filetype
-    char name[T2FS_FILENAME_MAX]; // Basename of the file, if it exists
+    char name[T2FS_FILENAME_MAX]; // Basename of the file, if it path is valid
     u32  par_inode; // Inode of parent directory of the file, if path is valid
     u32  inode;     // The inode of the file, if it exists
 };
@@ -153,6 +154,7 @@ int init_format(int sectors_per_block, int partition);
 int init_t2fs(int partition);
 
 // path.c
+struct t2fs_path get_path_info(char *filepath, bool resolve);
 
 // structure.c
 
@@ -166,5 +168,6 @@ void print_superblock(struct t2fs_superblock *sblock);
 
 extern struct t2fs_superblock superblock; // To hold management information
 extern u32 cwd_inode; // Inode number of the current working directory
+extern char cwd_path[T2FS_PATH_MAX]; // String with the cwd
 
 #endif // LIBT2FS_H

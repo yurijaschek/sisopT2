@@ -23,7 +23,7 @@
  *  Internal variables  *
  ************************/
 
-byte_t sector_buffer[SECTOR_SIZE];
+static byte_t sector_buffer[SECTOR_SIZE];
 
 
 /************************

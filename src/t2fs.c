@@ -21,23 +21,48 @@
 static const int partition = 0;
 
 
-/*************************
- *  Debugging functions  *
- *************************/
+/********************************
+ *  Structures print functions  *
+ ********************************/
 
 void print_superblock(struct t2fs_superblock *sblock)
 {
-    printf("Superblock:\n");
-    printf("\tsectors_per_block : %u\n", sblock->sectors_per_block);
-    printf("\tsignature         : %s\n", sblock->signature);
-    printf("\tfirst_sector      : %u\n", sblock->first_sector);
-    printf("\tnum_sectors       : %u\n", sblock->num_sectors);
-    printf("\tnum_blocks        : %u\n", sblock->num_blocks);
-    printf("\tnum_inodes        : %u\n", sblock->num_inodes);
-    printf("\tit_offset         : %u\n", sblock->it_offset);
-    printf("\tib_offset         : %u\n", sblock->ib_offset);
-    printf("\tbb_offset         : %u\n", sblock->bb_offset);
-    printf("\tblocks_offset     : %u\n", sblock->blocks_offset);
+    printf("t2fs_superblock:\n");
+    printf("    sectors_per_block : %u\n", sblock->sectors_per_block);
+    printf("    signature         : %s\n", sblock->signature);
+    printf("    first_sector      : %u\n", sblock->first_sector);
+    printf("    num_sectors       : %u\n", sblock->num_sectors);
+    printf("    num_blocks        : %u\n", sblock->num_blocks);
+    printf("    num_inodes        : %u\n", sblock->num_inodes);
+    printf("    it_offset         : %u\n", sblock->it_offset);
+    printf("    ib_offset         : %u\n", sblock->ib_offset);
+    printf("    bb_offset         : %u\n", sblock->bb_offset);
+    printf("    blocks_offset     : %u\n", sblock->blocks_offset);
+}
+
+void print_inode(u32 number, struct t2fs_inode *inode)
+{
+    printf("t2fs_inode <%u>:\n", number);
+    printf("    type       : %u\n", inode->type);
+    printf("    hl_count   : %u\n", inode->hl_count);
+    printf("    bytes_size : %u\n", inode->bytes_size);
+    printf("    direct_ptr :\n");
+    for(int i=0; i<NUM_DIRECT_PTR; i++)
+        printf("        [%02d]   : %u\n", i, inode->direct_ptr[i]);
+    printf("single_ptr     : %u\n", inode->singly_ptr);
+    printf("doubly_ptr     : %u\n", inode->doubly_ptr);
+    printf("triply_ptr     : %u\n", inode->triply_ptr);
+}
+
+void print_path(struct t2fs_path *path_info)
+{
+    printf("t2fs_path:\n");
+    printf("    valid     : %u\n", path_info->valid);
+    printf("    exists    : %u\n", path_info->exists);
+    printf("    type      : %u\n", path_info->type);
+    printf("    name      : %s\n", path_info->name);
+    printf("    par_inode : %u\n", path_info->par_inode);
+    printf("    inode     : %u\n", path_info->inode);
 }
 
 
@@ -46,7 +71,7 @@ void print_superblock(struct t2fs_superblock *sblock)
  ************************************/
 
 struct t2fs_superblock superblock;
-u32 cwd_inode = 1;
+u32 cwd_inode = ROOT_INODE;
 
 
 /************************
@@ -93,19 +118,18 @@ int format2 (int sectors_per_block)
     if(res != 0)
         return res;
 
-    u32 root_inode = use_new_inode(FILETYPE_DIRECTORY);
-    if(root_inode != 1U) // The root directory must be at inode 1
+    if(use_new_inode(FILETYPE_DIRECTORY) != ROOT_INODE)
         return -1;
 
-    res = insert_entry(root_inode, ".", root_inode);
+    res = insert_entry(ROOT_INODE, ".", ROOT_INODE);
     if(res != 0)
         return res;
 
-    res = insert_entry(root_inode, "..", root_inode);
+    res = insert_entry(ROOT_INODE, "..", ROOT_INODE);
     if(res != 0)
         return res;
 
-    cwd_inode = root_inode;
+    cwd_inode = ROOT_INODE;
 
     return 0;
 }
