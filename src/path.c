@@ -113,7 +113,7 @@ start: // When a link is found
     for(;;)
     {
         next = next_name(curr); // The first directory name now is '\0'-ended
-        u32 inode = get_inode_by_name(curr, dir_inode); // Search for the file
+        u32 inode = get_inode_by_name(dir_inode, curr); // Search for the file
         if(inode == 0) // File is not in the directory
         {
             if(next) // Invalid path

@@ -13,24 +13,13 @@
 #ifndef T2FS_H
 #define T2FS_H
 
+#include "t2fs_def.h"
 #include <stdint.h>
 
 
-/***********************************
- *  Constant and type definitions  *
- ***********************************/
-
-#define T2FS_FILENAME_MAX     32
-#define T2FS_PATH_MAX       1024
-
-// Types of files in the file system
-enum filetype
-{
-    FILETYPE_INVALID = 0,
-    FILETYPE_REGULAR,
-    FILETYPE_DIRECTORY,
-    FILETYPE_SYMLINK,
-};
+/*********************************
+ *  Type and struct definitions  *
+ *********************************/
 
 typedef int32_t FILE2; // For regular files handles
 typedef int32_t DIR2;  // For directory handles
@@ -38,9 +27,9 @@ typedef int32_t DIR2;  // For directory handles
 // Record that holds directory entry information of a file, read with readdir2
 typedef struct
 {
-    char name[T2FS_FILENAME_MAX];   // Name of the file whose entry was read
-    uint8_t  fileType;  // Type of the file, according to enum filetype
-    uint32_t fileSize;  // Size of the file, in bytes
+    char     name[T2FS_FILENAME_MAX]; // Name of the file whose entry was read
+    uint8_t  fileType; // Type of the file, according to enum filetype
+    uint32_t fileSize; // Size of the file, in bytes
 } DIRENT2;
 
 

@@ -14,13 +14,27 @@
  *   File allocation and management functions
  */
 
-#include "apidisk.h"
 #include "libt2fs.h"
 
 
 /************************
  *  Internal functions  *
  ************************/
+
+/*-----------------------------------------------------------------------------
+Funct:  Given an inode number, calculate the sector in the inodes table it's
+            in and the offset (in bytes) where the structure starts.
+Input:  inode  -> The inode number given
+        sector -> The sector the inode is in
+        byte   -> The offset in the sector where the inode is
+-----------------------------------------------------------------------------*/
+static void calculate_inode_table(u32 inode, u32 *sector, int *byte)
+{
+    int inodes_per_sector = superblock.sector_size / sizeof(struct t2fs_inode);
+    *sector = superblock.it_offset + inode / inodes_per_sector;
+    *byte = (inode % inodes_per_sector) * sizeof(struct t2fs_inode);
+}
+
 
 /*-----------------------------------------------------------------------------
 Funct:  Operate either the inodes bitmap or the blocks bitmap.
@@ -38,9 +52,9 @@ Return: On success with operation -1, the return is 0 if the inode/block is not
 -----------------------------------------------------------------------------*/
 static int operate_bitmap(u32 number, bool inode, int operation)
 {
-    u32 sector = number / (8 * SECTOR_SIZE);
+    u32 sector = number / (8 * superblock.sector_size);
     sector += inode ? superblock.ib_offset : superblock.bb_offset;
-    int byte = number % (8 * SECTOR_SIZE);
+    int byte = number % (8 * superblock.sector_size);
     int bit = number % 8;
 
     byte_t data;
@@ -84,17 +98,19 @@ static u32 first_free(bool inode)
 
 
 /*-----------------------------------------------------------------------------
-Funct:  Given an inode number, calculate the sector in the inodes table it's
-            in and the offset (in bytes) where the structure starts.
-Input:  inode  -> The inode number given
-        sector -> The sector the inode is in
-        byte   -> The offset in the sector where the inode is
+Funct:  Find a new free block to use.
+Return: On success, returns the block number (positive integer).
+        If there are no blocks available, 0 is returned.
 -----------------------------------------------------------------------------*/
-static void calculate_inode_table(u32 inode, u32 *sector, int *byte)
+static u32 get_new_block()
 {
-    int inodes_per_sector = SECTOR_SIZE / sizeof(struct t2fs_inode);
-    *sector = superblock.it_offset + inode / inodes_per_sector;
-    *byte = (inode % inodes_per_sector) * sizeof(struct t2fs_inode);
+    u32 ans = first_free(false);
+    if(ans != 0)
+    {
+        if(operate_bitmap(ans, false, 1) != 0)
+            return 0;
+    }
+    return ans;
 }
 
 
@@ -151,12 +167,12 @@ int write_inode(u32 inode, struct t2fs_inode *data)
 
 
 /*-----------------------------------------------------------------------------
-Funct:  Find a new free inode and use it.
+Funct:  Find a new free inode to use.
 Input:  type -> Type of the file the inode corresponds to
 Return: On success, returns the inode number (positive integer).
         If there are no inodes available, 0 is returned.
 -----------------------------------------------------------------------------*/
-u32 use_new_inode(u8 type)
+u32 get_new_inode(u8 type)
 {
     u32 inode = first_free(true);
     if(inode != 0)

@@ -104,7 +104,7 @@ int identify2 (char *name, int size)
 
 int format2 (int sectors_per_block)
 {
-    // We shouldn't call t2fs_init() in this function, since
+    // We shouldn't call t2fs_init() in the beginning of this function, since
     //   this function doesn't expect the partition to already be formatted
 
     if(sectors_per_block < 1 || sectors_per_block > 128) // Max allowed is 128
@@ -118,19 +118,17 @@ int format2 (int sectors_per_block)
     if(res != 0)
         return res;
 
-    if(use_new_inode(FILETYPE_DIRECTORY) != ROOT_INODE)
+    if(get_new_inode(FILETYPE_DIRECTORY) != ROOT_INODE)
         return -1;
 
     res = insert_entry(ROOT_INODE, ".", ROOT_INODE);
     if(res != 0)
         return res;
-
     res = insert_entry(ROOT_INODE, "..", ROOT_INODE);
     if(res != 0)
         return res;
 
     cwd_inode = ROOT_INODE;
-
     return 0;
 }
 

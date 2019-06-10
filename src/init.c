@@ -186,6 +186,8 @@ int init_format(int sectors_per_block, int partition)
     {
         .sectors_per_block = sectors_per_block,
         .signature = T2FS_SIGNATURE,
+        .sector_size = SECTOR_SIZE,
+        .block_size = sectors_per_block * SECTOR_SIZE,
         .first_sector = first_sector,
         .num_sectors = num_sectors,
         .num_blocks = num_blocks,

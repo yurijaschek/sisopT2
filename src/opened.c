@@ -11,7 +11,7 @@
  *****************************************************************************/
 
 /*
- *   File descriptor functions
+ *   Opened files and descriptor functions
  */
 
 #include "libt2fs.h"

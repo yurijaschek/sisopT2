@@ -13,7 +13,7 @@
 #ifndef LIBT2FS_H
 #define LIBT2FS_H
 
-#include "t2fs.h"
+#include "t2fs_def.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -36,9 +36,9 @@
  *  Constant and type definitions  *
  ***********************************/
 
-#define NUM_DIRECT_PTR 3 // Number of direct block pointers in inode
 #define T2FS_SIGNATURE "os sisopeiros" // Magic string in the superblock
-#define ROOT_INODE 1U
+#define ROOT_INODE     1U // Number of the root directory inode
+#define NUM_DIRECT_PTR 3  // Number of direct block pointers in inode
 
 typedef uint8_t byte_t;
 
@@ -53,9 +53,9 @@ typedef uint32_t u32;
 typedef uint64_t u64;
 
 
-/*********************
- *  Data structures  *
- *********************/
+/***************************
+ *  Structure definitions  *
+ ***************************/
 
 // Alignment is to be avoided for structures stored on disk
 #pragma pack(push, 1)
@@ -63,9 +63,9 @@ typedef uint64_t u64;
 // Partition table entry
 struct t2fs_partition
 {
-    u32 first_sector; // First valid sector of the partition
-    u32 last_sector;  // Last valid sector of the partition
-    char name[24];    // Name of the partition
+    u32  first_sector; // First valid sector of the partition
+    u32  last_sector;  // Last valid sector of the partition
+    char name[24];     // Name of the partition
 };
 
 // Master Boot Record structure
@@ -83,6 +83,8 @@ struct t2fs_superblock
 {
     u8   sectors_per_block; // Number of disk sectors per logical data block
     char signature[15]; // To be certain this partition was formatted by us
+    u32  sector_size;   // Size of a disk's sector, in bytes
+    u32  block_size;    // Size of a logical block, in bytes
     u32  first_sector;  // First sector of the partition (where superblock is)
     u32  num_sectors;   // Number of disk sectors this partition has
     u32  num_blocks;    // Number of logical data blocks
@@ -141,25 +143,29 @@ struct t2fs_path
 // allocation.c
 int read_inode(u32 inode, struct t2fs_inode *data);
 int write_inode(u32 inode, struct t2fs_inode *data);
-u32 use_new_inode(u8 type);
+u32 get_new_inode(u8 type);
 
 // cache.c
 int t2fs_read_sector(byte_t *buffer, u32 sector, int offset, int size);
 int t2fs_write_sector(byte_t *buffer, u32 sector, int offset, int size);
 
-// descriptor.c
-
 // init.c
 int init_format(int sectors_per_block, int partition);
 int init_t2fs(int partition);
+
+// opened.c
 
 // path.c
 struct t2fs_path get_path_info(char *filepath, bool resolve);
 
 // structure.c
+int insert_entry(u32 dir_inode, char *name, u32 inode);
+u32 get_inode_by_name(u32 dir_inode, char *name);
 
 // t2fs.c
 void print_superblock(struct t2fs_superblock *sblock);
+void print_inode(u32 number, struct t2fs_inode *inode);
+void print_path(struct t2fs_path *path_info);
 
 
 /**************************************
@@ -169,5 +175,6 @@ void print_superblock(struct t2fs_superblock *sblock);
 extern struct t2fs_superblock superblock; // To hold management information
 extern u32 cwd_inode; // Inode number of the current working directory
 extern char cwd_path[T2FS_PATH_MAX]; // String with the cwd
+
 
 #endif // LIBT2FS_H
