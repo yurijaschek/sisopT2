@@ -102,7 +102,7 @@ Funct:  Find a new free block to use.
 Return: On success, returns the block number (positive integer).
         If there are no blocks available, 0 is returned.
 -----------------------------------------------------------------------------*/
-static u32 get_new_block()
+static u32 find_new_block()
 {
     u32 ans = first_free(false);
     if(ans != 0)
@@ -172,7 +172,7 @@ Input:  type -> Type of the file the inode corresponds to
 Return: On success, returns the inode number (positive integer).
         If there are no inodes available, 0 is returned.
 -----------------------------------------------------------------------------*/
-u32 get_new_inode(u8 type)
+u32 find_new_inode(u8 type)
 {
     u32 inode = first_free(true);
     if(inode != 0)
@@ -190,4 +190,18 @@ u32 get_new_inode(u8 type)
     }
 
     return inode;
+}
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Allocate a new block for an inode to use.
+Input:  inode -> The inode that needs another block
+Return: On success, returns the inode number (positive integer).
+        If there are no inodes available, 0 is returned.
+-----------------------------------------------------------------------------*/
+u32 allocate_new_block(u32 inode)
+{
+    // TODO: Implement
+    (void)inode;
+    return 0;
 }

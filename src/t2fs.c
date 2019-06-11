@@ -46,12 +46,9 @@ void print_inode(u32 number, struct t2fs_inode *inode)
     printf("    type       : %u\n", inode->type);
     printf("    hl_count   : %u\n", inode->hl_count);
     printf("    bytes_size : %u\n", inode->bytes_size);
-    printf("    direct_ptr :\n");
-    for(int i=0; i<NUM_DIRECT_PTR; i++)
-        printf("        [%02d]   : %u\n", i, inode->direct_ptr[i]);
-    printf("single_ptr     : %u\n", inode->singly_ptr);
-    printf("doubly_ptr     : %u\n", inode->doubly_ptr);
-    printf("triply_ptr     : %u\n", inode->triply_ptr);
+    printf("    pointers   :\n");
+    for(int i=0; i<NUM_INODE_PTR; i++)
+        printf("        [%02d]   : %u\n", i, inode->pointers[i]);
 }
 
 void print_path(struct t2fs_path *path_info)
@@ -118,7 +115,7 @@ int format2 (int sectors_per_block)
     if(res != 0)
         return res;
 
-    if(get_new_inode(FILETYPE_DIRECTORY) != ROOT_INODE)
+    if(find_new_inode(FILETYPE_DIRECTORY) != ROOT_INODE)
         return -1;
 
     res = insert_entry(ROOT_INODE, ".", ROOT_INODE);

@@ -36,9 +36,11 @@
  *  Constant and type definitions  *
  ***********************************/
 
-#define T2FS_SIGNATURE "os sisopeiros" // Magic string in the superblock
-#define ROOT_INODE     1U // Number of the root directory inode
-#define NUM_DIRECT_PTR 3  // Number of direct block pointers in inode
+#define T2FS_SIGNATURE   "os sisopeiros" // Magic string in the superblock
+#define ROOT_INODE       1U // Number of the root directory inode
+#define NUM_DIRECT_PTR   3  // Number of direct block pointers in inode
+#define NUM_INDIRECT_LVL 3  // 0 = direct-only; 1 = singly; 2 = doubly; etc
+#define NUM_INODE_PTR    (NUM_DIRECT_PTR + NUM_INDIRECT_LVL) // Dir + indir ptr
 
 typedef uint8_t byte_t;
 
@@ -82,17 +84,17 @@ struct t2fs_mbr
 struct t2fs_superblock
 {
     u8   sectors_per_block; // Number of disk sectors per logical data block
-    char signature[15]; // To be certain this partition was formatted by us
-    u32  sector_size;   // Size of a disk's sector, in bytes
-    u32  block_size;    // Size of a logical block, in bytes
-    u32  first_sector;  // First sector of the partition (where superblock is)
-    u32  num_sectors;   // Number of disk sectors this partition has
-    u32  num_blocks;    // Number of logical data blocks
-    u32  num_inodes;    // Number of inodes
-    u32  it_offset;     // Sector offset of the inodes table
-    u32  ib_offset;     // Sector offset of the inodes bitmap
-    u32  bb_offset;     // Sector offset of the blocks bitmap
-    u32  blocks_offset; // Sector offset of the logical blocks
+    char signature[15];     // To be certain this partition was formatted by us
+    u32  sector_size;       // Size of a disk's sector, in bytes
+    u32  block_size;        // Size of a logical block, in bytes
+    u32  first_sector;      // First sector of the partition (superblock)
+    u32  num_sectors;       // Number of disk sectors this partition has
+    u32  num_blocks;        // Number of logical data blocks
+    u32  num_inodes;        // Number of inodes
+    u32  it_offset;         // Sector offset of the inodes table
+    u32  ib_offset;         // Sector offset of the inodes bitmap
+    u32  bb_offset;         // Sector offset of the blocks bitmap
+    u32  blocks_offset;     // Sector offset of the logical blocks
 };
 
 // Index node, which stores information about files
@@ -101,17 +103,14 @@ struct t2fs_inode
     u8  type;       // Type of the file (regular, directory etc)
     u32 hl_count;   // Number of hard links that have this inode
     u32 bytes_size; // Size of the file, in bytes
-    u32 direct_ptr[NUM_DIRECT_PTR]; // Direct pointers to blocks
-    u32 singly_ptr; // Singly indirect pointer
-    u32 doubly_ptr; // Doubly indirect pointer
-    u32 triply_ptr; // Triply indirect pointer
+    u32 pointers[NUM_INODE_PTR]; // Pointers to blocks
 };
 
 // Directory record (entry): what directories are composed of
 struct t2fs_record
 {
     char name[T2FS_FILENAME_MAX]; // Name of the file (unique to the directory)
-    u32  inode; // inode with the file's information (0 means unused entry)
+    u32  inode; // Inode with the file's information (0 means unused entry)
 };
 
 #pragma pack(pop)
@@ -143,7 +142,8 @@ struct t2fs_path
 // allocation.c
 int read_inode(u32 inode, struct t2fs_inode *data);
 int write_inode(u32 inode, struct t2fs_inode *data);
-u32 get_new_inode(u8 type);
+u32 find_new_inode(u8 type);
+u32 allocate_new_block(u32 inode);
 
 // cache.c
 int t2fs_read_sector(byte_t *buffer, u32 sector, int offset, int size);
