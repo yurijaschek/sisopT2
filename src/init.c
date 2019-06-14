@@ -16,6 +16,7 @@
 
 #include "apidisk.h"
 #include "libt2fs.h"
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -240,6 +241,15 @@ int init_t2fs(int partition)
     // Make sure it's our "magic string"
     if(strcmp(superblock.signature, T2FS_SIGNATURE) != 0)
         return -1;
+
+    // Allocate buffer memory
+    free(block_buffer); // free(NULL) is ok
+    block_buffer = malloc(superblock.block_size);
+    if(!block_buffer)
+        return -1;
+    // Start at root directory
+    cwd_inode = ROOT_INODE;
+    strcpy(cwd_path, "/");
 
     init_done = true;
     return 0;

@@ -45,6 +45,7 @@ void print_inode(u32 number, struct t2fs_inode *inode)
     printf("t2fs_inode <%u>:\n", number);
     printf("    type       : %u\n", inode->type);
     printf("    hl_count   : %u\n", inode->hl_count);
+    printf("    num_blocks : %u\n", inode->num_blocks);
     printf("    bytes_size : %u\n", inode->bytes_size);
     printf("    pointers   :\n");
     for(int i=0; i<NUM_INODE_PTR; i++)
@@ -67,8 +68,11 @@ void print_path(struct t2fs_path *path_info)
  *  External variables definitions  *
  ************************************/
 
+// All are initialized in t2fs_init
 struct t2fs_superblock superblock;
-u32 cwd_inode = ROOT_INODE;
+u32 cwd_inode;
+char cwd_path[T2FS_PATH_MAX];
+byte_t *block_buffer;
 
 
 /************************
@@ -111,11 +115,11 @@ int format2 (int sectors_per_block)
     if(res != 0)
         return res;
 
-    res = init_t2fs(partition);
+    res = init_t2fs(partition); // Initialize before calling functions
     if(res != 0)
         return res;
 
-    if(find_new_inode(FILETYPE_DIRECTORY) != ROOT_INODE)
+    if(find_new_inode(FILETYPE_DIRECTORY) != ROOT_INODE) // Should be 1
         return -1;
 
     res = insert_entry(ROOT_INODE, ".", ROOT_INODE);
@@ -125,7 +129,6 @@ int format2 (int sectors_per_block)
     if(res != 0)
         return res;
 
-    cwd_inode = ROOT_INODE;
     return 0;
 }
 

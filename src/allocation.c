@@ -98,7 +98,7 @@ static u32 first_free(bool inode)
 
 
 /*-----------------------------------------------------------------------------
-Funct:  Find a new free block to use.
+Funct:  Find a new free block to use, marking it as used, if found.
 Return: On success, returns the block number (positive integer).
         If there are no blocks available, 0 is returned.
 -----------------------------------------------------------------------------*/
@@ -122,7 +122,7 @@ static u32 find_new_block()
 Funct:  Read the given inode from disk (inodes table) to memory.
 Input:  inode -> The given inode to be read
         data  -> Where to store the inode information read
-Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
+Return: On success, 0 is returned. Otherwise, a negative value is returned.
 -----------------------------------------------------------------------------*/
 int read_inode(u32 inode, struct t2fs_inode *data)
 {
@@ -136,7 +136,7 @@ int read_inode(u32 inode, struct t2fs_inode *data)
     int res = t2fs_read_sector((byte_t*)data, sector, byte,
                                sizeof(struct t2fs_inode));
     if(res != 0)
-        return -1;
+        return res;
 
     return 0;
 }
@@ -146,7 +146,7 @@ int read_inode(u32 inode, struct t2fs_inode *data)
 Funct:  Write the given inode from memory to disk (inodes table).
 Input:  inode -> The given inode to be written
         data  -> Where the inode information to be written is
-Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
+Return: On success, 0 is returned. Otherwise, a negative value is returned.
 -----------------------------------------------------------------------------*/
 int write_inode(u32 inode, struct t2fs_inode *data)
 {
@@ -160,7 +160,7 @@ int write_inode(u32 inode, struct t2fs_inode *data)
     int res = t2fs_write_sector((byte_t*)data, sector, byte,
                                 sizeof(struct t2fs_inode));
     if(res != 0)
-        return -1;
+        return res;
 
     return 0;
 }
@@ -195,13 +195,41 @@ u32 find_new_inode(u8 type)
 
 /*-----------------------------------------------------------------------------
 Funct:  Allocate a new block for an inode to use.
-Input:  inode -> The inode that needs another block
-Return: On success, returns the inode number (positive integer).
-        If there are no inodes available, 0 is returned.
+Input:  inode_number -> The inode that needs another block
+Return: On success, returns the block number (positive integer).
+        If there are no blocks available, 0 is returned.
 -----------------------------------------------------------------------------*/
-u32 allocate_new_block(u32 inode)
+u32 allocate_new_block(u32 inode_number)
 {
-    // TODO: Implement
-    (void)inode;
-    return 0;
+    struct t2fs_inode inode;
+    int res = read_inode(inode_number, &inode);
+    if(res != 0)
+        return 0;
+    u32 ans = 0;
+    if(inode.num_blocks < NUM_DIRECT_PTR) // Can allocate direct pointer
+    {
+        ans = find_new_block();
+        if(ans == 0)
+            return 0;
+        inode.pointers[inode.num_blocks] = ans;
+    }
+    else
+    {
+        // TODO: Finish function in case of indirect pointers
+    }
+    inode.num_blocks++;
+    res = write_inode(inode_number, &inode);
+    if(res != 0)
+    {
+        // TODO: Try to deallocate the block
+        return 0;
+    }
+    return ans;
 }
+
+
+
+
+
+
+

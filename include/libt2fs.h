@@ -100,9 +100,10 @@ struct t2fs_superblock
 // Index node, which stores information about files
 struct t2fs_inode
 {
-    u8  type;       // Type of the file (regular, directory etc)
-    u32 hl_count;   // Number of hard links that have this inode
-    u32 bytes_size; // Size of the file, in bytes
+    u8  type;                    // Type of the file (regular, directory etc)
+    u32 hl_count;                // Number of hard links that have this inode
+    u32 bytes_size;              // Size of the file, in bytes
+    u32 num_blocks;              // Number of data blocks used
     u32 pointers[NUM_INODE_PTR]; // Pointers to blocks
 };
 
@@ -143,11 +144,13 @@ struct t2fs_path
 int read_inode(u32 inode, struct t2fs_inode *data);
 int write_inode(u32 inode, struct t2fs_inode *data);
 u32 find_new_inode(u8 type);
-u32 allocate_new_block(u32 inode);
+u32 allocate_new_block(u32 inode_number);
 
 // cache.c
-int t2fs_read_sector(byte_t *buffer, u32 sector, int offset, int size);
-int t2fs_write_sector(byte_t *buffer, u32 sector, int offset, int size);
+int t2fs_read_sector(byte_t *data, u32 sector, int offset, int size);
+int t2fs_write_sector(byte_t *data, u32 sector, int offset, int size);
+int t2fs_read_block(byte_t *data, u32 block);
+int t2fs_write_block(byte_t *data, u32 block);
 
 // init.c
 int init_format(int sectors_per_block, int partition);
@@ -172,7 +175,9 @@ void print_path(struct t2fs_path *path_info);
  *  Shared variables between sources  *
  **************************************/
 
+// All these variables are defined in t2fs.c
 extern struct t2fs_superblock superblock; // To hold management information
+extern byte_t *block_buffer; // To read data (directories and links) from disk
 extern u32 cwd_inode; // Inode number of the current working directory
 extern char cwd_path[T2FS_PATH_MAX]; // String with the cwd
 
