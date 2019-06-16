@@ -119,7 +119,7 @@ int format2 (int sectors_per_block)
     if(res != 0)
         return res;
 
-    if(find_new_inode(FILETYPE_DIRECTORY) != ROOT_INODE) // Should be 1
+    if(use_new_inode(FILETYPE_DIRECTORY) != ROOT_INODE) // Should be 1
         return -1;
 
     res = insert_entry(ROOT_INODE, ".", ROOT_INODE);
@@ -136,30 +136,63 @@ int format2 (int sectors_per_block)
 FILE2 create2 (char *path)
 {
     if(init_t2fs(partition) != 0) return -1;
-    (void)path;
-    return -1;
+    struct t2fs_path info = get_path_info(path, true);
+
+    if(!info.valid || (info.exists && info.type != FILETYPE_REGULAR))
+        return -1;
+
+    u32 inode = info.inode;
+    if(!info.exists) // Need to be created
+    {
+        inode = use_new_inode(FILETYPE_REGULAR);
+        if(inode == 0)
+            return -1;
+
+        int res = insert_entry(info.par_inode, info.name, inode);
+        if(res != 0)
+            return -1;
+    }
+
+    // TODO: Open
+
+    if(info.exists)
+    {
+        // TODO: Truncate to 0
+    }
+
+    // TODO: Return the handle
+    return 0;
 }
 
 
 int delete2 (char *path)
 {
     if(init_t2fs(partition) != 0) return -1;
-    (void)path;
-    return -1;
+    struct t2fs_path info = get_path_info(path, false);
+    print_path(&info);
+
+    if(!info.exists || info.type == FILETYPE_DIRECTORY)
+        return -1;
+
+    return delete_entry(info.par_inode, info.name);
 }
 
 
 FILE2 open2 (char *path)
 {
     if(init_t2fs(partition) != 0) return -1;
-    (void)path;
-    return -1;
+    struct t2fs_path info = get_path_info(path, true);
+
+    if(!info.exists || info.type == FILETYPE_DIRECTORY)
+        return -1;
+
+    // TODO: Open and return the handle
+    return 0;
 }
 
 
 int close2 (FILE2 handle)
 {
-    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     return -1;
 }
@@ -167,7 +200,6 @@ int close2 (FILE2 handle)
 
 int read2 (FILE2 handle, char *buffer, int size)
 {
-    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     (void)buffer;
     (void)size;
@@ -177,7 +209,6 @@ int read2 (FILE2 handle, char *buffer, int size)
 
 int write2 (FILE2 handle, char *buffer, int size)
 {
-    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     (void)buffer;
     (void)size;
@@ -187,7 +218,6 @@ int write2 (FILE2 handle, char *buffer, int size)
 
 int truncate2 (FILE2 handle)
 {
-    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     return -1;
 }
@@ -195,7 +225,6 @@ int truncate2 (FILE2 handle)
 
 int seek2 (FILE2 handle, uint32_t offset)
 {
-    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     (void)offset;
     return -1;
@@ -205,22 +234,43 @@ int seek2 (FILE2 handle, uint32_t offset)
 int mkdir2 (char *path)
 {
     if(init_t2fs(partition) != 0) return -1;
-    (void)path;
-    return -1;
+    struct t2fs_path info = get_path_info(path, true);
+
+    if(!info.valid || info.exists)
+        return -1;
+
+    u32 inode = use_new_inode(FILETYPE_DIRECTORY);
+    if(inode == 0)
+        return -1;
+
+    int res;
+    res = insert_entry(inode, ".", inode);
+    if(res != 0)
+        return -1;
+    res = insert_entry(inode, "..", info.par_inode);
+    if(res != 0)
+        return -1;
+    res = insert_entry(info.par_inode, info.name, inode);
+
+    return 0;
 }
 
 
 int rmdir2 (char *path)
 {
     if(init_t2fs(partition) != 0) return -1;
-    (void)path;
-    return -1;
+    struct t2fs_path info = get_path_info(path, false);
+
+    if(!info.exists || info.type != FILETYPE_DIRECTORY)
+        return -1;
+
+    // TODO: Check if dir is deletable to delete it
+    return 0;
 }
 
 
 int chdir2 (char *path)
 {
-    if(init_t2fs(partition) != 0) return -1;
     (void)path;
     return -1;
 }
@@ -228,7 +278,6 @@ int chdir2 (char *path)
 
 int getcwd2 (char *path, int size)
 {
-    if(init_t2fs(partition) != 0) return -1;
     (void)path;
     (void)size;
     return -1;
@@ -237,7 +286,6 @@ int getcwd2 (char *path, int size)
 
 DIR2 opendir2 (char *path)
 {
-    if(init_t2fs(partition) != 0) return -1;
     (void)path;
     return -1;
 }
@@ -245,7 +293,6 @@ DIR2 opendir2 (char *path)
 
 int readdir2 (DIR2 handle, DIRENT2 *dentry)
 {
-    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     (void)dentry;
     return -1;
@@ -254,7 +301,6 @@ int readdir2 (DIR2 handle, DIRENT2 *dentry)
 
 int closedir2 (DIR2 handle)
 {
-    if(init_t2fs(partition) != 0) return -1;
     (void)handle;
     return -1;
 }
@@ -262,7 +308,6 @@ int closedir2 (DIR2 handle)
 
 int ln2 (char *linkpath, char *pointpath)
 {
-    if(init_t2fs(partition) != 0) return -1;
     (void)linkpath;
     (void)pointpath;
     return -1;

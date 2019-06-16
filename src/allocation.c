@@ -172,7 +172,7 @@ Input:  type -> Type of the file the inode corresponds to
 Return: On success, returns the inode number (positive integer).
         If there are no inodes available, 0 is returned.
 -----------------------------------------------------------------------------*/
-u32 find_new_inode(u8 type)
+u32 use_new_inode(u8 type)
 {
     u32 inode = first_free(true);
     if(inode != 0)
@@ -195,30 +195,32 @@ u32 find_new_inode(u8 type)
 
 /*-----------------------------------------------------------------------------
 Funct:  Allocate a new block for an inode to use.
-Input:  inode_number -> The inode that needs another block
+Input:  inode -> The inode that needs another block
 Return: On success, returns the block number (positive integer).
         If there are no blocks available, 0 is returned.
 -----------------------------------------------------------------------------*/
-u32 allocate_new_block(u32 inode_number)
+u32 allocate_new_block(u32 inode)
 {
-    struct t2fs_inode inode;
-    int res = read_inode(inode_number, &inode);
+    struct t2fs_inode inode_s;
+    int res = read_inode(inode, &inode_s);
     if(res != 0)
         return 0;
     u32 ans = 0;
-    if(inode.num_blocks < NUM_DIRECT_PTR) // Can allocate direct pointer
+    if(inode_s.num_blocks < NUM_DIRECT_PTR) // Can allocate direct pointer
     {
         ans = find_new_block();
         if(ans == 0)
             return 0;
-        inode.pointers[inode.num_blocks] = ans;
+        inode_s.pointers[inode_s.num_blocks] = ans;
     }
     else
     {
         // TODO: Finish function in case of indirect pointers
     }
-    inode.num_blocks++;
-    res = write_inode(inode_number, &inode);
+    inode_s.num_blocks++;
+    if(inode_s.type == FILETYPE_DIRECTORY || inode_s.type == FILETYPE_SYMLINK)
+        inode_s.bytes_size += superblock.block_size;
+    res = write_inode(inode, &inode_s);
     if(res != 0)
     {
         // TODO: Try to deallocate the block
@@ -228,8 +230,39 @@ u32 allocate_new_block(u32 inode_number)
 }
 
 
+/*-----------------------------------------------------------------------------
+Funct:  Increment the hard link counter of a given inode.
+Input:  inode -> The inode whose hl_counter is to be incremented
+Return: On success, 0 is returned. Otherwise, a negative value is returned.
+-----------------------------------------------------------------------------*/
+int inc_hl_count(u32 inode)
+{
+    struct t2fs_inode inode_s;
+    int res = read_inode(inode, &inode_s);
+    if(res != 0)
+        return res;
+    inode_s.hl_count++;
+    return write_inode(inode, &inode_s);
+}
 
 
-
-
-
+/*-----------------------------------------------------------------------------
+Funct:  Decrement the hard link counter of a given inode, deleting the inode
+            if it reaches 0.
+Input:  inode -> The inode whose hl_counter is to be decremented
+Return: On success, 0 is returned. Otherwise, a negative value is returned.
+-----------------------------------------------------------------------------*/
+int dec_hl_count(u32 inode)
+{
+    struct t2fs_inode inode_s;
+    int res = read_inode(inode, &inode_s);
+    if(res != 0)
+        return res;
+    if(--inode_s.hl_count == 0)
+    {
+        // TODO: Deallocate the inode's blocks
+        struct t2fs_inode aux = {};
+        inode_s = aux;
+    }
+    return write_inode(inode, &inode_s);
+}

@@ -18,8 +18,9 @@
  *  Constant definitions  *
  **************************/
 
-#define T2FS_FILENAME_MAX   32 // Maximum size for filename (including '\0')
-#define T2FS_PATH_MAX     1024 // Maximum size for a path (including '\0')
+#define T2FS_FILENAME_MAX       32 // Max size for filename (including '\0')
+#define T2FS_PATH_MAX         1024 // Max size for a path (including '\0')
+#define T2FS_MAX_FILES_OPENED   10 // Max number of regular files opened
 
 // Types of files in the file system
 enum filetype

@@ -101,6 +101,7 @@ struct t2fs_superblock
 struct t2fs_inode
 {
     u8  type;                    // Type of the file (regular, directory etc)
+    u8  reserved[3];             // Reserved (for alignment)
     u32 hl_count;                // Number of hard links that have this inode
     u32 bytes_size;              // Size of the file, in bytes
     u32 num_blocks;              // Number of data blocks used
@@ -143,8 +144,10 @@ struct t2fs_path
 // allocation.c
 int read_inode(u32 inode, struct t2fs_inode *data);
 int write_inode(u32 inode, struct t2fs_inode *data);
-u32 find_new_inode(u8 type);
-u32 allocate_new_block(u32 inode_number);
+u32 use_new_inode(u8 type);
+u32 allocate_new_block(u32 inode);
+int inc_hl_count(u32 inode);
+int dec_hl_count(u32 inode);
 
 // cache.c
 int t2fs_read_sector(byte_t *data, u32 sector, int offset, int size);
@@ -164,6 +167,7 @@ struct t2fs_path get_path_info(char *filepath, bool resolve);
 // structure.c
 int insert_entry(u32 dir_inode, char *name, u32 inode);
 u32 get_inode_by_name(u32 dir_inode, char *name);
+int delete_entry(u32 dir_inode, char *name);
 
 // t2fs.c
 void print_superblock(struct t2fs_superblock *sblock);

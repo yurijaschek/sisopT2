@@ -15,3 +15,21 @@
  */
 
 #include "libt2fs.h"
+
+
+/************************
+ *  Internal variables  *
+ ************************/
+
+// Position 0 is reserved to directory descriptor
+// Positions 1 to T2FS_MAX_FILES_OPENED is for regular files
+static struct t2fs_descriptor table[1+T2FS_MAX_FILES_OPENED];
+
+
+/************************
+ *  Internal functions  *
+ ************************/
+
+/************************
+ *  External functions  *
+ ************************/
