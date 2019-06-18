@@ -48,99 +48,6 @@ static int call_directly(int (*fn)(u32, va_list), u32 block, ...)
 
 
 /*-----------------------------------------------------------------------------
-Funct:  Given a directory data block and its indirection level, apply a given
-            function to each of its composing data blocks, in ascending order.
-        Please, refer to iterate_inode_blocks function for details about the
-            application of the given function.
-        This function helps to implement the different indirection levels of
-            how blocks are allocated with inodes, part of iterate_inode_blocks.
-Input:  block -> Block to be iterated
-        level -> Level of indirection (0 = direct; 1 = singly; 2 = doubly; etc)
-        fn    -> The function that should be applied to each block
-        args  -> The additional arguments
-Return: Same return as specified in the iterate_inode_blocks function.
------------------------------------------------------------------------------*/
-static int
-iterate_indirection(u32 block, int level,
-                    int (*fn)(u32, va_list), va_list args)
-{
-    if(level == 0)
-        return fn(block, args);
-
-    byte_t *data = malloc(superblock.block_size);
-    if(!data)
-        return -1;
-    int res = t2fs_read_block(data, block);
-    if(res != 0)
-        return res;
-
-    int num_iter = superblock.block_size / sizeof(u32);
-    u32 *it = (u32*)data;
-    for(int i=0; i<num_iter; i++)
-    {
-        res = 1;
-        if(it[i] == 0)
-            break;
-        va_list a;
-        va_copy(a, args);
-        res = iterate_indirection(it[i], level-1, fn, a);
-        if(res <= 0)
-            break;
-    }
-    free(data);
-    return 0;
-}
-
-
-/*-----------------------------------------------------------------------------
-Funct:  Given a directory inode, apply a given function to each of its
-            composing data blocks, in ascending order, according to the
-            function's return value:
-        =0 : The function succeeded. Return success without iterating further;
-        <0 : The function returned an error. Return error immediately;
-        >0 : The function didn't succeed: iterate further.
-        The function must return an int and have a block number type (u32) as
-            its first argument, though it can have any number of additional
-            arguments, which must be received in a single va_list variable.
-        It's the caller's responsibility to ensure that the number of
-            additional arguments provided to this function matches the number
-            of arguments expected by the given function inside the va_list.
-Input:  dir_inode -> The given directory inode
-        fn        -> The function that should be applied to each block
-        ...       -> The additional arguments
-Return: If, at any point, the given function succeeds when called with a block,
-            0 is returned.
-        If all calls return positive and there is no blocks left to apply, the
-            return is a positive value.
-        If an error occurs at any point, a negative value will be returned.
------------------------------------------------------------------------------*/
-static int iterate_dir_blocks(u32 dir_inode, int (*fn)(u32, va_list), ...)
-{
-    struct t2fs_inode dir;
-    int res = read_inode(dir_inode, &dir);
-    if(res != 0)
-        return res;
-    va_list args;
-    va_start(args, fn); // Initialize arguments after the last named one
-    for(int i=0; i<NUM_INODE_PTR; i++)
-    {
-        res = 1;
-        u32 block = dir.pointers[i];
-        if(block == 0) // No blocks left to apply
-            break;
-        int level = MAX(0, i-NUM_DIRECT_PTR+1); // Levels of indirection
-        va_list a;
-        va_copy(a, args); // To be able to use it again
-        res = iterate_indirection(block, level, fn, a);
-        if(res <= 0)
-            break;
-    }
-    va_end(args); // Every va_start needs a va_end
-    return res;
-}
-
-
-/*-----------------------------------------------------------------------------
 Funct:  Insert an entry in a specific directory block.
 Input:  block -> Block to which insert the entry
         args  -> va_list that must be composed of:
@@ -215,9 +122,54 @@ static int block_search_by_name(u32 block, va_list args)
 }
 
 
+/*-----------------------------------------------------------------------------
+Funct:  Test if directory is deletable, given a specific block.
+Input:  block -> Block of the directory to test whether it's deletable or not
+        args  -> va_list that must be empty.
+Return: On failure, 0 is returned. On error, a negative value is returned.
+        Otherwise, if it can be deleted, a positive value is returned.
+-----------------------------------------------------------------------------*/
+static int block_dir_deletable(u32 block, va_list args)
+{
+    (void)args; // Unused parameter
+    int res = t2fs_read_block(block_buffer, block);
+    if(res != 0)
+        return res;
+    struct t2fs_record *dir = (struct t2fs_record*)block_buffer;
+    int num_entries = superblock.block_size / sizeof(struct t2fs_record);
+    for(int i=0; i<num_entries; i++)
+    {
+        if(dir[i].inode != 0) // Valid entry, must be equal to "." or ".." only
+        {
+            if(strcmp(dir[i].name, ".") != 0 && strcmp(dir[i].name, "..") != 0)
+                return 0; // Valid non-trivial entry, dir can't be deleted
+        }
+    }
+    return 1; // Iterate further. Or, if at the last block, dir is deletable
+}
+
+
 /************************
  *  External functions  *
  ************************/
+
+/*-----------------------------------------------------------------------------
+Funct:  Search entries in a directory by name, returning its inode, if found.
+Input:  dir_inode -> Inode of the directory to be searched
+        name      -> Name of the file to search for
+Return: On success, the inode of the file (entry) is returned.
+        Otherwise, if the file doesn't exist in the directory, 0 is returned.
+-----------------------------------------------------------------------------*/
+u32 get_inode_by_name(u32 dir_inode, char *name)
+{
+    u32 inode = 0; // To gather the answer of block_get_inode_by_name
+    // Apply the "block_search_by_name" function to each directory block
+    iterate_inode_blocks(dir_inode, block_search_by_name,
+                         name, &inode, false);
+    // If the function failed, inode would still be 0
+    return inode;
+}
+
 
 /*-----------------------------------------------------------------------------
 Funct:  Insert an entry in a directory.
@@ -230,8 +182,8 @@ Return: On success, 0 is returned.
 int insert_entry(u32 dir_inode, char *name, u32 inode)
 {
     // Apply the "block_insert_entry" function to each block of the directory
-    int res = iterate_dir_blocks(dir_inode, block_insert_entry,
-                                 name, inode);
+    int res = iterate_inode_blocks(dir_inode, block_insert_entry,
+                                   name, inode);
     if(res < 0)
         return res;
     // Couldn't insert entry. Allocate new block
@@ -248,29 +200,11 @@ int insert_entry(u32 dir_inode, char *name, u32 inode)
     {
         if(inc_hl_count(inode) != 0)
         {
-            // TODO: Try to remove the entry
+            delete_entry(dir_inode, name);
             res = -1;
         }
     }
     return res;
-}
-
-
-/*-----------------------------------------------------------------------------
-Funct:  Search entries in a directory by name, returning its inode, if found.
-Input:  dir_inode -> Inode of the directory to be searched
-        name      -> Name of the file to search for
-Return: On success, the inode of the file (entry) is returned.
-        Otherwise, if the file doesn't exist in the directory, 0 is returned.
------------------------------------------------------------------------------*/
-u32 get_inode_by_name(u32 dir_inode, char *name)
-{
-    u32 inode = 0; // To gather the answer of block_get_inode_by_name
-    // Apply the "block_search_by_name" function to each directory block
-    iterate_dir_blocks(dir_inode, block_search_by_name,
-                       name, &inode, false);
-    // If the function failed, inode would still be 0
-    return inode;
 }
 
 
@@ -285,12 +219,25 @@ int delete_entry(u32 dir_inode, char *name)
 {
     u32 inode = 0; // To gather the answer of block_get_inode_by_name
     // Apply the "block_search_by_name" function to each directory block
-    iterate_dir_blocks(dir_inode, block_search_by_name,
-                       name, &inode, true);
+    iterate_inode_blocks(dir_inode, block_search_by_name,
+                         name, &inode, true);
 
     int res = 0;
     if(inode != 0) // Not using the inode from this entry anymore
         res = dec_hl_count(inode);
 
     return res;
+}
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Test if a directory can be deleted, given its inode.
+Input:  dir_inode -> Inode of the directory to be tested
+Return: Whether the direcory can be deleted (true) or not (false).
+-----------------------------------------------------------------------------*/
+bool dir_deletable(u32 dir_inode)
+{
+    if(iterate_inode_blocks(dir_inode, block_dir_deletable) > 0)
+        return true;
+    return false;
 }

@@ -33,6 +33,21 @@ typedef struct
 } DIRENT2;
 
 
+/**********************************
+ *  Unused professor definitions  *
+ **********************************/
+
+#define PROFESSOR_COMPLIANT 1 // 1 for the official assignment submition
+#if PROFESSOR_COMPLIANT
+
+#define INVALID_PTR -1
+typedef unsigned char BYTE;
+typedef unsigned short int WORD;
+typedef unsigned int DWORD;
+
+#endif // PROFESSOR_COMPLIANT
+
+
 /*************************************************
  *  API functions declaration and documentation  *
  *************************************************/

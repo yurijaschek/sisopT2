@@ -15,6 +15,7 @@
  */
 
 #include "libt2fs.h"
+#include <stdio.h>
 #include <string.h>
 
 
@@ -29,10 +30,10 @@ Input:  str -> The given string
 static void remove_repeated_slashes(char *str)
 {
     int len = strlen(str);
-    str++;
+    str++; // Skip first character
     while(len > 1) // And not (len > 0) to copy the '\0' when moving
     {
-        if(*str != '/' || *(str-1) != '/')
+        if(*str != '/' || *(str-1) != '/') // Test current and previous char
             str++;
         else // Consecutive slash
             memmove(str-1, str, len); // Overwrite the previous
@@ -53,7 +54,7 @@ Return: A pointer to the next name in the path string, just after the '\0' that
 -----------------------------------------------------------------------------*/
 static char *next_name(char *str)
 {
-    for(; *str; str++)
+    for(; *str; str++) // Increments until '\0'
     {
         if(*str == '/')
         {
@@ -62,6 +63,26 @@ static char *next_name(char *str)
         }
     }
     return 0; // NULL
+}
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Given a path string, check if it ends with a slash and, if it does,
+            append a '.' to it.
+        In other words, if the path ends with a slash, it must be a directory.
+Input:  str -> The given path string
+-----------------------------------------------------------------------------*/
+static void end_slash_force_dir(char *str)
+{
+    int len = strlen(str);
+    if(str[len-1] == '/') // Ends with a slash
+    {
+        if(len+1 < T2FS_PATH_MAX)
+        {
+            str[len++] = '.';
+            str[len] = '\0';
+        }
+    }
 }
 
 
@@ -84,12 +105,14 @@ struct t2fs_path get_path_info(char *filepath, bool resolve)
     struct t2fs_path ans = {}; // To be returned
     char path[T2FS_PATH_MAX];  // To preserve the original string
     strncpy(path, filepath, T2FS_PATH_MAX);
+    u32 dir_inode = cwd_inode; // Assume it's relative (will be checked later)
 
     int max_link = 128; // To avoid infinite loops with symlinks
 start: // When a link is found
     if(path[0] == '\0') // Empty string not acceptable
         return ans;
     remove_repeated_slashes(path); // So ".//file" == "./file", for example
+    end_slash_force_dir(path); // So "mydir/" == "mydir/.", for example
     if(strcmp(path, "/") == 0) // It's the root directory
     {
         ans.valid = ans.exists = true;
@@ -103,7 +126,6 @@ start: // When a link is found
     char *curr = path; // The current name in the path
     char *next; // To know if curr is the last name
     // The inode of the current directory in the search
-    u32 dir_inode = cwd_inode; // Assume it's relative
     if(path[0] == '/') // It's absolute
     {
         curr++; // Ignore the initial '/'
@@ -142,7 +164,13 @@ start: // When a link is found
             {
                 if(max_link-- == 0)
                     return ans;
-                // TODO: path = contents(file) + "/" + path
+                if(t2fs_read_block(block_buffer, file.pointers[0]) != 0)
+                    return ans;
+                char aux[T2FS_PATH_MAX];
+                strcpy(aux, path); // aux = path
+                // path = contents(file) + "/" + path
+                snprintf(path, T2FS_PATH_MAX,
+                         "%s/%s", (char*)block_buffer, aux);
                 goto start;
             }
         }
@@ -160,7 +188,10 @@ start: // When a link is found
         {
             if(max_link-- == 0)
                 return ans;
-            // TODO: path = contents(file)
+            if(t2fs_read_block(block_buffer, file.pointers[0]) != 0)
+                return ans;
+            // path = contents(file)
+            strncpy(path, (char*)block_buffer, T2FS_PATH_MAX);
             goto start;
         }
     }

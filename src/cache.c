@@ -36,7 +36,7 @@ Funct:  Read data from the given disk sector to the given data buffer.
 Input:  data   -> Where to store the data read
         sector -> The given sector to be read, relative to the partition
         offset -> Offset in the sector where the desired data is to be read
-        size   -> Number of bytes to be read
+        size   -> Number of bytes to read
 Return: On success, 0 is returned. Otherwise, a negative value is returned.
 -----------------------------------------------------------------------------*/
 int t2fs_read_sector(byte_t *data, u32 sector, int offset, int size)
@@ -59,7 +59,7 @@ Funct:  Write the given data to the given disk sector.
 Input:  data   -> Where the data is
         sector -> The given sector to be written, relative to the partition
         offset -> Offset in the sector where the desired data is to be written
-        size   -> Number of bytes to be written
+        size   -> Number of bytes to write
 Return: On success, 0 is returned. Otherwise, a negative value is returned.
 -----------------------------------------------------------------------------*/
 int t2fs_write_sector(byte_t *data, u32 sector, int offset, int size)

@@ -14,6 +14,7 @@
 #define LIBT2FS_H
 
 #include "t2fs_def.h"
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -121,6 +122,7 @@ struct t2fs_record
 struct t2fs_descriptor
 {
     s32 id;       // Descriptor identifier (FILE2 or DIR2) (0 = invalid)
+    u8 type;      // Type of the file opened
     u32 curr_pos; // Byte offset from the beginning of the file
     u32 inode;    // The inode that corresponds to the opened file
 };
@@ -146,8 +148,10 @@ int read_inode(u32 inode, struct t2fs_inode *data);
 int write_inode(u32 inode, struct t2fs_inode *data);
 u32 use_new_inode(u8 type);
 u32 allocate_new_block(u32 inode);
+int deallocate_blocks(u32 inode, int count);
 int inc_hl_count(u32 inode);
 int dec_hl_count(u32 inode);
+int iterate_inode_blocks(u32 inode, int (*fn)(u32, va_list), ...);
 
 // cache.c
 int t2fs_read_sector(byte_t *data, u32 sector, int offset, int size);
@@ -160,18 +164,25 @@ int init_format(int sectors_per_block, int partition);
 int init_t2fs(int partition);
 
 // opened.c
+struct t2fs_descriptor *get_new_desc(u32 inode, u8 type);
+struct t2fs_descriptor *find_desc(int fd);
+void release_desc(struct t2fs_descriptor *fd);
+void close_all_inode(u32 inode);
 
 // path.c
 struct t2fs_path get_path_info(char *filepath, bool resolve);
 
 // structure.c
-int insert_entry(u32 dir_inode, char *name, u32 inode);
 u32 get_inode_by_name(u32 dir_inode, char *name);
+int insert_entry(u32 dir_inode, char *name, u32 inode);
 int delete_entry(u32 dir_inode, char *name);
+bool dir_deletable(u32 dir_inode);
 
 // t2fs.c
+void print_mbr(struct t2fs_mbr *mbr);
 void print_superblock(struct t2fs_superblock *sblock);
 void print_inode(u32 number, struct t2fs_inode *inode);
+void print_descriptor(struct t2fs_descriptor *desc);
 void print_path(struct t2fs_path *path_info);
 
 

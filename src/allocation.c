@@ -15,6 +15,8 @@
  */
 
 #include "libt2fs.h"
+#include <stdarg.h>
+#include <stdlib.h>
 
 
 /************************
@@ -111,6 +113,50 @@ static u32 find_new_block()
             return 0;
     }
     return ans;
+}
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Given a data block and its indirection level, apply a given function to
+            each of its composing data blocks, in ascending order.
+        Please, refer to iterate_inode_blocks function for details about the
+            application of the given function.
+        This function helps to implement the different indirection levels of
+            how blocks are allocated with inodes, part of iterate_inode_blocks.
+Input:  block -> Block to be iterated
+        level -> Level of indirection (0 = direct; 1 = singly; 2 = doubly; etc)
+        fn    -> The function that should be applied to each block
+        args  -> The additional arguments
+Return: Same return as specified in the iterate_inode_blocks function.
+-----------------------------------------------------------------------------*/
+static int iterate_indirection(u32 block, int level,
+                               int (*fn)(u32, va_list), va_list args)
+{
+    if(level == 0)
+        return fn(block, args);
+
+    byte_t *data = malloc(superblock.block_size);
+    if(!data)
+        return -1;
+    int res = t2fs_read_block(data, block);
+    if(res != 0)
+        return res;
+
+    int num_iter = superblock.block_size / sizeof(u32);
+    u32 *it = (u32*)data;
+    for(int i=0; i<num_iter; i++)
+    {
+        res = 1;
+        if(it[i] == 0)
+            break;
+        va_list a;
+        va_copy(a, args);
+        res = iterate_indirection(it[i], level-1, fn, a);
+        if(res <= 0)
+            break;
+    }
+    free(data);
+    return 0;
 }
 
 
@@ -220,13 +266,27 @@ u32 allocate_new_block(u32 inode)
     inode_s.num_blocks++;
     if(inode_s.type == FILETYPE_DIRECTORY || inode_s.type == FILETYPE_SYMLINK)
         inode_s.bytes_size += superblock.block_size;
+
     res = write_inode(inode, &inode_s);
     if(res != 0)
-    {
-        // TODO: Try to deallocate the block
         return 0;
-    }
+
     return ans;
+}
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Deallocate the last 'count' blocks of the given inode.
+        If count is -1, this function deallocates all blocks.
+Input:  inode -> The inode that needs block deallocation
+        count -> How many blocks to deallocate
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
+-----------------------------------------------------------------------------*/
+int deallocate_blocks(u32 inode, int count)
+{
+    (void)inode; (void)count;
+    // TODO: Implement
+    return 0;
 }
 
 
@@ -260,9 +320,57 @@ int dec_hl_count(u32 inode)
         return res;
     if(--inode_s.hl_count == 0)
     {
-        // TODO: Deallocate the inode's blocks
+        deallocate_blocks(inode, -1);
+        close_all_inode(inode); // To prevent reading garbage
         struct t2fs_inode aux = {};
         inode_s = aux;
     }
     return write_inode(inode, &inode_s);
+}
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Given an inode, apply a given function to each of its composing data
+            blocks, in ascending order, according to the function's return:
+        =0 : The function succeeded. Return success without iterating further;
+        <0 : The function returned an error. Return error immediately;
+        >0 : The function didn't succeed: iterate further.
+        The function must return an int and have a block number type (u32) as
+            its first argument, though it can have any number of additional
+            arguments, which must be received in a single va_list variable.
+        It's the caller's responsibility to ensure that the number of
+            additional arguments provided to this function matches the number
+            of arguments expected by the given function inside the va_list.
+Input:  inode -> The given inode
+        fn    -> The function that should be applied to each block
+        ...   -> The additional arguments
+Return: If, at any point, the given function succeeds when called with a block,
+            0 is returned.
+        If all calls return positive and there is no blocks left to apply, the
+            return is a positive value.
+        If an error occurs at any point, a negative value will be returned.
+-----------------------------------------------------------------------------*/
+int iterate_inode_blocks(u32 inode, int (*fn)(u32, va_list), ...)
+{
+    struct t2fs_inode inode_s;
+    int res = read_inode(inode, &inode_s);
+    if(res != 0)
+        return res;
+    va_list args;
+    va_start(args, fn); // Initialize arguments after the last named one
+    for(int i=0; i<NUM_INODE_PTR; i++)
+    {
+        res = 1;
+        u32 block = inode_s.pointers[i];
+        if(block == 0) // No blocks left to apply
+            break;
+        int level = MAX(0, i-NUM_DIRECT_PTR+1); // Levels of indirection
+        va_list a;
+        va_copy(a, args); // To be able to use it again
+        res = iterate_indirection(block, level, fn, a);
+        if(res <= 0)
+            break;
+    }
+    va_end(args); // Every va_start needs a va_end
+    return res;
 }
