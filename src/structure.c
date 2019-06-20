@@ -123,6 +123,37 @@ static int block_search_by_name(u32 block, va_list args)
 
 
 /*-----------------------------------------------------------------------------
+Funct:  Search entries in a specific directory block by inode.
+Input:  block -> Block in which to search for the entry
+        args  -> va_list that must be composed of:
+            name  -> Name of the file to be returned
+            inode -> The inode to be searched for
+Return: On success, 0 is returned. On error, a negative value is returned.
+        Otherwise, if it's not in the block, a positive value is returned.
+-----------------------------------------------------------------------------*/
+static int block_search_by_inode(u32 block, va_list args)
+{
+    char *name = va_arg(args, char*);
+    u32 inode = va_arg(args, u32);
+
+    int res = t2fs_read_block(block_buffer, block);
+    if(res != 0)
+        return res;
+    struct t2fs_record *dir = (struct t2fs_record*)block_buffer;
+    int num_entries = superblock.block_size / sizeof(struct t2fs_record);
+    for(int i=0; i<num_entries; i++)
+    {
+        if(dir[i].inode == inode) // Found entry
+        {
+            strcpy(name, dir[i].name);
+            return 0;
+        }
+    }
+    return 1; // Iterate further
+}
+
+
+/*-----------------------------------------------------------------------------
 Funct:  Test if directory is deletable, given a specific block.
 Input:  block -> Block of the directory to test whether it's deletable or not
         args  -> va_list that must be empty.
@@ -168,6 +199,21 @@ u32 get_inode_by_name(u32 dir_inode, char *name)
                          name, &inode, false);
     // If the function failed, inode would still be 0
     return inode;
+}
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Search entries in a directory by name, returning its inode, if found.
+Input:  dir_inode -> Inode of the directory to be searched
+        name      -> Name of the file to search for
+Return: On success, the inode of the file (entry) is returned.
+        Otherwise, if the file doesn't exist in the directory, 0 is returned.
+-----------------------------------------------------------------------------*/
+int get_name_by_inode(u32 dir_inode, char *name, u32 inode)
+{
+    // Apply the "block_search_by_inode" function to each directory block
+    return iterate_inode_blocks(dir_inode, block_search_by_inode,
+                                name, inode);
 }
 
 

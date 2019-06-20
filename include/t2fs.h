@@ -337,4 +337,21 @@ Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 int ln2 (char *linkpath, char *pointpath);
 
 
+/*-----------------------------------------------------------------------------
+Funct:  Create a hard link file, given its path and what it points to.
+        For this function to work, linkpath must be a valid path, but it must
+            not exist. Additionally, pointpath must be an existing regular or
+            link file.
+        Please note that the link created by this function will have its entry
+            type as the same type of the pointpath inode. This function does
+            not resolve symlinks.
+
+Input:  linkpath  -> Path of where the link should be created
+        pointpath -> Path that the link should be the same file as
+
+Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
+-----------------------------------------------------------------------------*/
+int hardln2 (char *linkpath, char *pointpath);
+
+
 #endif // T2FS_H

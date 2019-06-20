@@ -99,7 +99,6 @@ void print_path(struct t2fs_path *path_info)
 // All are initialized in init_t2fs
 struct t2fs_superblock superblock;
 u32 cwd_inode;
-char cwd_path[T2FS_PATH_MAX];
 byte_t *block_buffer;
 
 
@@ -173,7 +172,6 @@ FILE2 create2 (char *path)
 {
     if(init_t2fs(partition) != 0) return -1;
     info = get_path_info(path, true);
-
     if(!info.valid || (info.exists && info.type != FILETYPE_REGULAR))
         return -1;
 
@@ -204,7 +202,6 @@ int delete2 (char *path)
 {
     if(init_t2fs(partition) != 0) return -1;
     info = get_path_info(path, false);
-
     if(!info.exists || info.type == FILETYPE_DIRECTORY)
         return -1;
 
@@ -216,7 +213,6 @@ FILE2 open2 (char *path)
 {
     if(init_t2fs(partition) != 0) return -1;
     info = get_path_info(path, true);
-
     if(!info.exists || info.type != FILETYPE_REGULAR)
         return -1;
 
@@ -331,7 +327,6 @@ int mkdir2 (char *path)
 {
     if(init_t2fs(partition) != 0) return -1;
     info = get_path_info(path, true);
-
     if(!info.valid || info.exists)
         return -1;
 
@@ -356,10 +351,11 @@ int rmdir2 (char *path)
 {
     if(init_t2fs(partition) != 0) return -1;
     info = get_path_info(path, false);
-
     if(!info.exists || info.type != FILETYPE_DIRECTORY)
         return -1;
 
+    if(info.inode == ROOT_INODE || info.inode == cwd_inode)
+        return -1;
     if(!dir_deletable(info.inode))
         return -1;
 
@@ -377,14 +373,41 @@ int rmdir2 (char *path)
 
 int chdir2 (char *path)
 {
-    (void)path;
-    // TODO: Implement
-    return -1;
+    if(init_t2fs(partition) != 0) return -1;
+    info = get_path_info(path, true);
+    if(!info.exists || info.type != FILETYPE_DIRECTORY)
+        return -1;
+
+    cwd_inode = info.inode;
+    return 0;
 }
 
 
 int getcwd2 (char *path, int size)
 {
+    if(init_t2fs(partition) != 0) return -1;
+    char cwd_path[T2FS_PATH_MAX] = "";
+    u32 temp = cwd_inode;
+
+    while(cwd_inode != ROOT_INODE)
+    {
+        info = get_path_info("..", false);
+        char name[T2FS_FILENAME_MAX+1] = "/";
+        if(get_name_by_inode(info.inode, name+1, cwd_inode) != 0)
+        {
+            printf("IXI!\n");
+            return -1;
+        }
+        reverse_string(name);
+        strncat(cwd_path, name, T2FS_PATH_MAX);
+        cwd_inode = info.inode;
+    }
+
+    cwd_inode = temp;
+
+    if(strlen(cwd_path) == 0) // Root directory
+        strcpy(cwd_path, "/");
+    reverse_string(cwd_path);
     strncpy(path, cwd_path, size);
     return 0;
 }
@@ -394,7 +417,6 @@ DIR2 opendir2 (char *path)
 {
     if(init_t2fs(partition) != 0) return -1;
     info = get_path_info(path, true);
-
     if(!info.exists || info.type != FILETYPE_DIRECTORY)
         return -1;
 
@@ -461,7 +483,6 @@ int ln2 (char *linkpath, char *pointpath)
 {
     if(init_t2fs(partition) != 0) return -1;
     info = get_path_info(linkpath, false);
-
     if(!info.valid || (info.exists && info.type != FILETYPE_SYMLINK))
         return -1;
 
@@ -487,4 +508,20 @@ int ln2 (char *linkpath, char *pointpath)
     memset(block_buffer, 0, superblock.block_size);
     strncpy((char*)block_buffer, pointpath, superblock.block_size);
     return t2fs_write_block(block_buffer, inode_s.pointers[0]);
+}
+
+
+int hardln2(char *linkpath, char *pointpath)
+{
+    if(init_t2fs(partition) != 0) return -1;
+    info = get_path_info(pointpath, false);
+    if(!info.exists || info.type == FILETYPE_DIRECTORY)
+        return -1;
+
+    u32 inode = info.inode;
+    info = get_path_info(linkpath, false);
+    if(!info.valid || info.exists)
+        return -1;
+
+    return insert_entry(info.par_inode, info.name, inode);
 }

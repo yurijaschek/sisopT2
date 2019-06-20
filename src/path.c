@@ -190,3 +190,19 @@ start: // When a link is found
         }
     }
 }
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Given a string, reverse it in place.
+Input:  str -> The given string to be reversed
+-----------------------------------------------------------------------------*/
+void reverse_string(char *str)
+{
+    int i=0, len=strlen(str);
+    for(i=0; i<len/2; i++)
+    {
+        char aux = str[i];
+        str[i] = str[len-1-i];
+        str[len-1-i] = aux;
+    }
+}

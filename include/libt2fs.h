@@ -177,9 +177,11 @@ int t2fs_rw_data(byte_t *buffer, u32 inode, u32 curr_pos, u32 size, bool wr);
 
 // path.c
 struct t2fs_path get_path_info(char *filepath, bool resolve);
+void reverse_string(char *str);
 
 // structure.c
 u32 get_inode_by_name(u32 dir_inode, char *name);
+int get_name_by_inode(u32 dir_inode, char *name, u32 inode);
 int insert_entry(u32 dir_inode, char *name, u32 inode);
 int delete_entry(u32 dir_inode, char *name);
 bool dir_deletable(u32 dir_inode);
@@ -200,7 +202,6 @@ void print_path(struct t2fs_path *path_info);
 extern struct t2fs_superblock superblock; // To hold management information
 extern byte_t *block_buffer; // To read data (directories and links) from disk
 extern u32 cwd_inode; // Inode number of the current working directory
-extern char cwd_path[T2FS_PATH_MAX]; // String with the cwd
 
 
 #endif // LIBT2FS_H

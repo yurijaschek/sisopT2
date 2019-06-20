@@ -249,7 +249,6 @@ int init_t2fs(int partition)
         return -1;
     // Start at root directory
     cwd_inode = ROOT_INODE;
-    strcpy(cwd_path, "/");
 
     init_done = true;
     return 0;
