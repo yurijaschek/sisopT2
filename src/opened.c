@@ -15,6 +15,7 @@
  */
 
 #include "libt2fs.h"
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -26,6 +27,69 @@
 // Positions 1 to T2FS_MAX_FILES_OPENED is for regular files
 static struct t2fs_descriptor table[1+T2FS_MAX_FILES_OPENED];
 static int fd_counter;
+
+
+/************************
+ *  Internal functions  *
+ ************************/
+
+static u32 get_nth_block_indirect(u32 *block, int level, int count)
+{
+    if(level > 0) // block is index block pointer
+    {
+        byte_t *buffer = malloc(superblock.block_size);
+        if(!buffer)
+            return 0;
+
+        if(*block == 0) // Index block unallocated
+            return 0;
+        if(t2fs_read_block(buffer, *block) != 0)
+            return 0;
+
+        u32 level_blocks = 1;
+        for(int i=0; i<level-1; i++)
+            level_blocks *= superblock.block_size / sizeof(u32);
+
+        return get_nth_block_indirect(&((u32*)buffer)[count/level_blocks],
+                                      level-1, count % level_blocks);
+    }
+    else // block is data block pointer
+    {
+        return *block;
+    }
+}
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Given an opened inode, return its nth allocated block.
+Input:  inode -> Pointer to the opened inode
+        n     -> The data block index N, starting from 0
+Return: On success, the block number is returned.
+        Otherwise, if the Nth block is not allocated, return 0.
+-----------------------------------------------------------------------------*/
+static u32 get_nth_block(struct t2fs_inode *inode, int n)
+{
+    if(n < NUM_DIRECT_PTR)
+        return inode->pointers[n];
+
+    if(NUM_INDIRECT_LVL == 0) // No indirection
+        return 0;
+
+    u32 rem_blocks = n - NUM_DIRECT_PTR;
+    u32 level_blocks = 1;
+    for(int i=0; i<NUM_INDIRECT_LVL; i++)
+    {
+        level_blocks *= superblock.block_size / sizeof(u32);
+        if(rem_blocks < level_blocks)
+        {
+            return get_nth_block_indirect(&inode->pointers[NUM_DIRECT_PTR+i],
+                                    i+1, rem_blocks);
+        }
+        rem_blocks -= level_blocks;
+    }
+
+    return 0;
+}
 
 
 /************************
@@ -137,7 +201,54 @@ Return: On success, the number of bytes read/written is returned.
 -----------------------------------------------------------------------------*/
 int t2fs_rw_data(byte_t *buffer, u32 inode, u32 curr_pos, u32 size, bool wr)
 {
-    (void)buffer; (void)inode; (void)curr_pos; (void)size; (void)wr;
-    // TODO: Implement
-    return -1;
+    struct t2fs_inode inode_s;
+    if(read_inode(inode, &inode_s) != 0)
+        return -1;
+
+    u32 rem = size;
+    while(rem > 0)
+    {
+        u32 offset = curr_pos % superblock.block_size; // Offset in the block
+        // Operations are done one block each time. Number of bytes to operate
+        u32 bytes = MIN(rem, superblock.block_size - offset);
+        if(!wr) // Only if reading, respect the size of the file
+            bytes = MIN(bytes, inode_s.bytes_size - curr_pos);
+        if(bytes == 0) // Nothing to be done
+            break;
+
+        u32 block = get_nth_block(&inode_s, curr_pos / superblock.block_size);
+        if(block == 0 && !wr)
+            break;
+        if(block == 0) // Writing: Need to allocate a new block
+        {
+            block = allocate_new_block(inode);
+            if(block == 0)
+                break;
+            // Because the inode was written in allocate_new_block
+            if(read_inode(inode, &inode_s) != 0)
+                break;
+        }
+
+        if(t2fs_read_block(block_buffer, block) != 0)
+            break;
+        if(wr) // Write operation
+        {
+            memcpy(block_buffer+offset, buffer, bytes);
+            if(t2fs_write_block(block_buffer, block) != 0)
+                break;
+        }
+        else // Read operation
+            memcpy(buffer, block_buffer+offset, bytes);
+
+        rem -= bytes;
+        buffer += bytes;
+        curr_pos += bytes;
+        if(wr) // To handle the file getting larger
+            inode_s.bytes_size = MAX(inode_s.bytes_size, curr_pos);
+    }
+
+    if(wr) // To handle file getting larger
+        write_inode(inode, &inode_s);
+
+    return size - rem;
 }
