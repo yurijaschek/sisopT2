@@ -113,14 +113,7 @@ start: // When a link is found
         return ans;
     remove_repeated_slashes(path); // So ".//file" == "./file", for example
     end_slash_force_dir(path); // So "mydir/" == "mydir/.", for example
-    if(strcmp(path, "/") == 0) // It's the root directory
-    {
-        ans.valid = ans.exists = true;
-        ans.type = FILETYPE_DIRECTORY;
-        strcpy(ans.name, "/");
-        ans.inode = ans.par_inode = ROOT_INODE;
-        return ans;
-    }
+    // It also turns the root directory in "/."
 
     // To store the '/' positions in the path
     char *curr = path; // The current name in the path
@@ -167,9 +160,9 @@ start: // When a link is found
                 if(t2fs_read_block(block_buffer, file.pointers[0]) != 0)
                     return ans;
                 char aux[T2FS_PATH_MAX];
-                strcpy(aux, path); // aux = path
-                // path = contents(file) + "/" + path
-                snprintf(path, T2FS_PATH_MAX,
+                strcpy(aux, next); // aux = next
+                // path = contents(file) + "/" + next
+                snprintf(path, MIN(T2FS_PATH_MAX, superblock.block_size),
                          "%s/%s", (char*)block_buffer, aux);
                 goto start;
             }
@@ -191,7 +184,8 @@ start: // When a link is found
             if(t2fs_read_block(block_buffer, file.pointers[0]) != 0)
                 return ans;
             // path = contents(file)
-            strncpy(path, (char*)block_buffer, T2FS_PATH_MAX);
+            strncpy(path, (char*)block_buffer,
+                    MIN(T2FS_PATH_MAX, superblock.block_size));
             goto start;
         }
     }

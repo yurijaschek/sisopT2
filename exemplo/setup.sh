@@ -1,4 +1,3 @@
-rm -f t2fs_disk.dat
 cd ..
 make clean
 make all64
