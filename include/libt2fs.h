@@ -37,10 +37,14 @@
  *  Constant and type definitions  *
  ***********************************/
 
+// Changeable
+#define T2FS_USE_CACHE   1 // 0 = false; 1 = true
 #define T2FS_SIGNATURE   "os sisopeiros" // Magic string in the superblock
-#define ROOT_INODE       1U // Number of the root directory inode
 #define NUM_DIRECT_PTR   3  // Number of direct block pointers in inode
 #define NUM_INDIRECT_LVL 3  // 0 = direct-only; 1 = singly; 2 = doubly; etc
+
+// Unchangeable / fixed
+#define ROOT_INODE       1U // Number of the root directory inode (must be 1)
 #define NUM_INODE_PTR    (NUM_DIRECT_PTR + NUM_INDIRECT_LVL) // Dir + indir ptr
 
 typedef uint8_t byte_t;
@@ -168,6 +172,9 @@ struct t2fs_descriptor *get_new_desc(u32 inode, u8 type);
 struct t2fs_descriptor *find_desc(int fd);
 void release_desc(struct t2fs_descriptor *fd);
 void close_all_inode(u32 inode);
+void adjust_pointer_all(u32 inode, u32 limit);
+// int t2fs_read_data();
+// int t2fs_write_data();
 
 // path.c
 struct t2fs_path get_path_info(char *filepath, bool resolve);

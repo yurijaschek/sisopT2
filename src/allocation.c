@@ -17,6 +17,7 @@
 #include "libt2fs.h"
 #include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 /************************
@@ -160,6 +161,119 @@ static int iterate_indirection(u32 block, int level,
 }
 
 
+/*-----------------------------------------------------------------------------
+Funct:  Allocate a new indirect block.
+        The parameter level controls whether the block variable is a block
+            index (> 0) or an address where to put the new block (= 0).
+        If block is 0 and there are still indirection, the function allocates
+            a new index block additionally.
+Input:  block -> Pointer to index block or where to store the newly allocated
+        level -> Level of indirection (0 = direct; 1 = singly; 2 = doubly; etc)
+        count -> Number of blocks before the one to be allocated (level-wise)
+Return: On success, the data block allocated is returned.
+        Otherwise, 0 (invalid block) is returned.
+-----------------------------------------------------------------------------*/
+static u32 allocate_indirect(u32 *block, int level, u32 count)
+{
+    if(level > 0) // block is index block pointer
+    {
+        byte_t *buffer = malloc(superblock.block_size);
+        if(!buffer)
+            return 0;
+
+        if(*block == 0) // Index block unallocated
+        {
+            *block = find_new_block();
+            if(*block == 0)
+                return 0;
+            memset(buffer, 0, superblock.block_size); // All invalid pointers
+        }
+        else
+        {
+            if(t2fs_read_block(buffer, *block) != 0)
+                return 0;
+        }
+
+        u32 level_blocks = 1;
+        for(int i=0; i<level-1; i++)
+            level_blocks *= superblock.block_size / sizeof(u32);
+        u32 ans = allocate_indirect(&((u32*)buffer)[count/level_blocks],
+                                    level-1, count % level_blocks);
+
+        if(t2fs_write_block(buffer, *block) != 0)
+            return 0;
+
+        return ans;
+    }
+    else // block is data block pointer
+    {
+        return *block = find_new_block();
+    }
+}
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Deallocate an indirect block being used.
+        The parameter level controls whether the block variable is a block
+            index (> 0) or an address of the block to be deallocated (= 0).
+        If there are no more blocks in the index block, the function
+            deallocates the index block additionally.
+Input:  block -> Pointer to index block or where is the block to be deallocated
+        level -> Level of indirection (0 = direct; 1 = singly; 2 = doubly; etc)
+        count -> Number of blocks before the one to be deallocated (level-wise)
+Return: On success, 0 is returned. Otherwise, a negative value is returned.
+-----------------------------------------------------------------------------*/
+static int deallocate_indirect(u32 *block, int level, u32 *count)
+{
+    if(*block == 0 || *count == 0) // Nothing to be done
+        return 0;
+
+    int res;
+    if(level == 0) // block is data block pointer
+    {
+        res = operate_bitmap(*block, false, 0);
+        if(res != 0)
+            return res;
+        *block = 0;
+        (*count)--;
+        return 0;
+    }
+    else // block is index block pointer
+    {
+        byte_t *buffer = malloc(superblock.block_size);
+        if(!buffer)
+            return -1;
+
+        res = t2fs_read_block(buffer, *block);
+        if(res != 0)
+            return res;
+
+        for(int i=superblock.block_size/sizeof(u32)-1; i>=0 && *count>0; i--)
+        {
+            res = deallocate_indirect(&((u32*)buffer)[i], level-1, count);
+            if(res != 0)
+                return res;
+        }
+
+        if(((u32*)buffer)[0] == 0) // Empty index block
+        {
+            operate_bitmap(*block, false, 0);
+            if(res != 0)
+                return res;
+            *block = 0;
+        }
+        else
+        {
+            res = t2fs_write_block(buffer, *block);
+            if(res != 0)
+                return res;
+        }
+
+        return 0;
+    }
+}
+
+
 /************************
  *  External functions  *
  ************************/
@@ -253,16 +367,30 @@ u32 allocate_new_block(u32 inode)
         return 0;
     u32 ans = 0;
     if(inode_s.num_blocks < NUM_DIRECT_PTR) // Can allocate direct pointer
+        ans = allocate_indirect(&inode_s.pointers[inode_s.num_blocks], 0, 0);
+    else // Need to check indirect pointers
     {
-        ans = find_new_block();
-        if(ans == 0)
+        if(NUM_INDIRECT_LVL == 0) // No indirection
             return 0;
-        inode_s.pointers[inode_s.num_blocks] = ans;
+        u32 rem_blocks = inode_s.num_blocks - NUM_DIRECT_PTR;
+        u32 level_blocks = 1;
+        for(int i=0; i<NUM_INDIRECT_LVL; i++)
+        {
+            level_blocks *= superblock.block_size / sizeof(u32);
+            if(rem_blocks < level_blocks)
+            {
+                ans = allocate_indirect(&inode_s.pointers[NUM_DIRECT_PTR+i],
+                                        i+1, rem_blocks);
+                break;
+            }
+            rem_blocks -= level_blocks;
+        }
     }
-    else
-    {
-        // TODO: Finish function in case of indirect pointers
-    }
+
+    if(ans == 0) // Block couldn't be allocated
+        return 0;
+
+    // Block was allocated
     inode_s.num_blocks++;
     if(inode_s.type == FILETYPE_DIRECTORY || inode_s.type == FILETYPE_SYMLINK)
         inode_s.bytes_size += superblock.block_size;
@@ -284,9 +412,29 @@ Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int deallocate_blocks(u32 inode, int count)
 {
-    (void)inode; (void)count;
-    // TODO: Implement
-    return 0;
+    if(count == 0)
+        return 0;
+
+    struct t2fs_inode inode_s;
+    int res = read_inode(inode, &inode_s);
+    if(res != 0)
+        return 0;
+
+    if(count == -1)
+        count = inode_s.num_blocks;
+    u32 counter = count;
+    inode_s.num_blocks -= counter;
+
+    for(int i=NUM_INODE_PTR-1; i>=0 && counter>0; i--)
+    {
+        int level = MAX(0, i-NUM_DIRECT_PTR+1);
+        res = deallocate_indirect(&inode_s.pointers[i], level, &counter);
+        if(res != 0)
+            break;
+    }
+
+    inode_s.num_blocks += counter; // If some could not have been deallocated
+    return write_inode(inode, &inode_s);
 }
 
 
@@ -324,6 +472,7 @@ int dec_hl_count(u32 inode)
         close_all_inode(inode); // To prevent reading garbage
         struct t2fs_inode aux = {};
         inode_s = aux;
+        res = operate_bitmap(inode, true, 0); // Mark inode as free
     }
     return write_inode(inode, &inode_s);
 }

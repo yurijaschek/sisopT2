@@ -17,6 +17,7 @@
 #include "libt2fs.h"
 #include "t2fs.h"
 #include <stdio.h>
+#include <string.h>
 
 static const int partition = 0;
 
@@ -95,7 +96,7 @@ void print_path(struct t2fs_path *path_info)
  *  External variables definitions  *
  ************************************/
 
-// All are initialized in t2fs_init
+// All are initialized in init_t2fs
 struct t2fs_superblock superblock;
 u32 cwd_inode;
 char cwd_path[T2FS_PATH_MAX];
@@ -193,10 +194,7 @@ FILE2 create2 (char *path)
         return -1;
 
     if(info.exists)
-    {
-        if(deallocate_blocks(inode, -1) != 0)
-            return -1;
-    }
+        truncate2(fd->id);
 
     return fd->id;
 }
@@ -264,18 +262,46 @@ int write2 (FILE2 handle, char *buffer, int size)
 
 int truncate2 (FILE2 handle)
 {
-    (void)handle;
-    // TODO: Implement
-    return -1;
+    if(init_t2fs(partition) != 0) return -1;
+    fd = find_desc(handle);
+    if(!fd || fd->type != FILETYPE_REGULAR)
+        return -1;
+
+    struct t2fs_inode inode;
+    if(read_inode(fd->inode, &inode) != 0)
+        return -1;
+
+    inode.bytes_size = fd->curr_pos;
+    if(write_inode(fd->inode, &inode) != 0)
+        return -1;
+
+    int num = -1; // Number of blocks for deallocation (-1 = all blocks)
+    if(fd->curr_pos != 0) // The formula below doesn't work for curr_pos = 0
+        num = inode.num_blocks - (1 + (fd->curr_pos-1)/superblock.block_size);
+
+    adjust_pointer_all(fd->inode, fd->curr_pos); // To prevent hazards
+    return deallocate_blocks(fd->inode, num);
 }
 
 
 int seek2 (FILE2 handle, uint32_t offset)
 {
-    (void)handle;
-    (void)offset;
-    // TODO: Implement
-    return -1;
+    if(init_t2fs(partition) != 0) return -1;
+    fd = find_desc(handle);
+    if(!fd || fd->type != FILETYPE_REGULAR)
+        return -1;
+
+    struct t2fs_inode inode;
+    if(read_inode(fd->inode, &inode) != 0)
+        return -1;
+
+    if((s32)offset == -1)
+        fd->curr_pos = inode.bytes_size;
+    else if(offset <= inode.bytes_size)
+        fd->curr_pos = offset;
+    else
+        return -1;
+    return 0;
 }
 
 
@@ -337,10 +363,8 @@ int chdir2 (char *path)
 
 int getcwd2 (char *path, int size)
 {
-    (void)path;
-    (void)size;
-    // TODO: Implement
-    return -1;
+    strncpy(path, cwd_path, size);
+    return 0;
 }
 
 
@@ -383,8 +407,32 @@ int closedir2 (DIR2 handle)
 
 int ln2 (char *linkpath, char *pointpath)
 {
-    (void)linkpath;
-    (void)pointpath;
-    // TODO: Implement
-    return -1;
+    if(init_t2fs(partition) != 0) return -1;
+    info = get_path_info(linkpath, false);
+
+    if(!info.valid || (info.exists && info.type != FILETYPE_SYMLINK))
+        return -1;
+
+    u32 inode = info.inode;
+    if(!info.exists) // Need to be created
+    {
+        inode = use_new_inode(FILETYPE_SYMLINK);
+        if(inode == 0)
+            return -1;
+
+        int res = insert_entry(info.par_inode, info.name, inode);
+        if(res != 0)
+            return -1;
+
+        if(allocate_new_block(inode) == 0)
+            return -1;
+    }
+
+    struct t2fs_inode inode_s;
+    if(read_inode(inode, &inode_s) != 0)
+        return -1;
+
+    memset(block_buffer, 0, superblock.block_size);
+    strncpy((char*)block_buffer, pointpath, superblock.block_size);
+    return t2fs_write_block(block_buffer, inode_s.pointers[0]);
 }

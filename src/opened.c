@@ -35,10 +35,12 @@ static int fd_counter;
 static int block_t2fs_rw(u32 block, va_list args)
 {
     u32 *offset = va_arg(args, u32*);
-    u32 *count = va_arg(args, u32*);
+    u32 *bytes_left = va_arg(args, u32*);
     byte_t **buffer = va_arg(args, byte_t**);
 
+    (void)block; (void)offset; (void)bytes_left; (void)buffer;
     // TODO: Implement
+    return -1;
 }
 
 
@@ -118,6 +120,23 @@ void close_all_inode(u32 inode)
     {
         if(table[i].inode == inode)
             release_desc(&table[i]);
+    }
+}
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Adjust the current position of all file descriptors with the given
+            inode for it to not be greater than the given limit.
+        This function must be called when truncating a file.
+Input:  inode -> Inode to be searched for
+        limit -> The current position limit (new size of the file)
+-----------------------------------------------------------------------------*/
+void adjust_pointer_all(u32 inode, u32 limit)
+{
+    for(int i=0; i<=T2FS_MAX_FILES_OPENED; i++)
+    {
+        if(table[i].inode == inode)
+            table[i].curr_pos = MIN(table[i].curr_pos, limit);
     }
 }
 
