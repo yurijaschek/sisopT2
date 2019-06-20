@@ -117,7 +117,7 @@ int t2fs_write_block(byte_t *data, u32 block)
                + block * superblock.sectors_per_block;
     for(u8 i=0; i<superblock.sectors_per_block; i++)
     {
-        int res = write_sector(sector, data);
+        int res = write_sector(sector+i, data);
         if(res != 0)
             return -abs(res);
         data += superblock.sector_size;
