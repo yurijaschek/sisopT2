@@ -173,8 +173,7 @@ struct t2fs_descriptor *find_desc(int fd);
 void release_desc(struct t2fs_descriptor *fd);
 void close_all_inode(u32 inode);
 void adjust_pointer_all(u32 inode, u32 limit);
-// int t2fs_read_data();
-// int t2fs_write_data();
+int t2fs_rw_data(byte_t *buffer, u32 inode, u32 curr_pos, u32 size, bool wr);
 
 // path.c
 struct t2fs_path get_path_info(char *filepath, bool resolve);

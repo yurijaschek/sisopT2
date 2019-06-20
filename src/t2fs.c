@@ -242,21 +242,43 @@ int close2 (FILE2 handle)
 
 int read2 (FILE2 handle, char *buffer, int size)
 {
-    (void)handle;
-    (void)buffer;
-    (void)size;
-    // TODO: Implement
-    return -1;
+    if(init_t2fs(partition) != 0) return -1;
+    fd = find_desc(handle);
+    if(!fd || fd->type != FILETYPE_REGULAR)
+        return -1;
+
+    if(size < 0)
+        return -1;
+    if(size == 0)
+        return 0; // 0 bytes read
+
+    int ans = t2fs_rw_data((byte_t*)buffer, fd->inode,
+                           fd->curr_pos, size, false);
+    if(ans >= 0)
+        fd->curr_pos += ans; // Advance current position in file
+
+    return ans;
 }
 
 
 int write2 (FILE2 handle, char *buffer, int size)
 {
-    (void)handle;
-    (void)buffer;
-    (void)size;
-    // TODO: Implement
-    return -1;
+    if(init_t2fs(partition) != 0) return -1;
+    fd = find_desc(handle);
+    if(!fd || fd->type != FILETYPE_REGULAR)
+        return -1;
+
+    if(size < 0)
+        return -1;
+    if(size == 0)
+        return 0; // 0 bytes written
+
+    int ans = t2fs_rw_data((byte_t*)buffer, fd->inode,
+                           fd->curr_pos, size, true);
+    if(ans >= 0)
+        fd->curr_pos += ans; // Advance current position in file
+
+    return ans;
 }
 
 
@@ -386,10 +408,40 @@ DIR2 opendir2 (char *path)
 
 int readdir2 (DIR2 handle, DIRENT2 *dentry)
 {
-    (void)handle;
-    (void)dentry;
-    // TODO: Implement
-    return -1;
+    if(init_t2fs(partition) != 0) return -1;
+    fd = find_desc(handle);
+    if(!fd || fd->type != FILETYPE_DIRECTORY)
+        return -1;
+
+    struct t2fs_record record = {};
+    int res;
+    for(;;)
+    {
+        // Find next entry
+        res = t2fs_rw_data((byte_t*)&record, fd->inode, fd->curr_pos,
+                           sizeof(struct t2fs_record), false);
+        if(res <= 0) // Reached end of directory
+            return -1;
+        fd->curr_pos += res;
+        // Test if a record can fit at the end of the block
+        u32 next_block_pos = superblock.block_size
+                             * (1 + fd->curr_pos / superblock.block_size);
+        if((next_block_pos - fd->curr_pos) / sizeof(struct t2fs_record) < 1)
+            fd->curr_pos = next_block_pos; // Couldn't fit
+
+        if(record.inode != 0) // Found valid entry
+            break;
+    }
+
+    struct t2fs_inode inode;
+    if(read_inode(record.inode, &inode) != 0)
+        return -1;
+
+    strcpy(dentry->name, record.name);
+    dentry->fileType = inode.type;
+    dentry->fileSize = inode.bytes_size;
+
+    return 0;
 }
 
 

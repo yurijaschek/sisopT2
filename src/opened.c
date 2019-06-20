@@ -29,22 +29,6 @@ static int fd_counter;
 
 
 /************************
- *  Internal functions  *
- ************************/
-
-static int block_t2fs_rw(u32 block, va_list args)
-{
-    u32 *offset = va_arg(args, u32*);
-    u32 *bytes_left = va_arg(args, u32*);
-    byte_t **buffer = va_arg(args, byte_t**);
-
-    (void)block; (void)offset; (void)bytes_left; (void)buffer;
-    // TODO: Implement
-    return -1;
-}
-
-
-/************************
  *  External functions  *
  ************************/
 
@@ -141,6 +125,19 @@ void adjust_pointer_all(u32 inode, u32 limit)
 }
 
 
-// TODO: Define
-int t2fs_read_data();
-int t2fs_write_data();
+/*-----------------------------------------------------------------------------
+Funct:  Read from or write to a file.
+Input:  buffer   -> Where to put data read or to get data from if writing
+        inode    -> Inode of the file to be read/written
+        curr_pos -> Current position on the file to operate
+        size     -> Number of bytes to read/write
+        wr       -> If the operation is read (false) or write (true)
+Return: On success, the number of bytes read/written is returned.
+        On error, a negative value is returned.
+-----------------------------------------------------------------------------*/
+int t2fs_rw_data(byte_t *buffer, u32 inode, u32 curr_pos, u32 size, bool wr)
+{
+    (void)buffer; (void)inode; (void)curr_pos; (void)size; (void)wr;
+    // TODO: Implement
+    return -1;
+}
