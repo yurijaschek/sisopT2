@@ -168,7 +168,8 @@ int init_format(int sectors_per_block, int partition)
 
     u32 remaining = num_sectors - 1; // Remaining sectors. Superblock reserved
 
-    u32 it_sectors = remaining / 100; // Sectors for inodes table, roughly 1%
+    // Sectors for inodes table, defined as a % of the total number of sectors
+    u32 it_sectors = (INODES_SECTOR_PCT / 100.0) * remaining;
     if(it_sectors == 0)
         it_sectors++; // At least 1
     remaining -= it_sectors;
@@ -247,9 +248,17 @@ int init_t2fs(int partition)
     block_buffer = malloc(superblock.block_size);
     if(!block_buffer)
         return -1;
+
+    for(int i=0; i<NUM_INDIRECT_LVL; i++)
+    {
+        free(idx_block_buffer[i]);
+        idx_block_buffer[i] = malloc(superblock.block_size);
+        if(!idx_block_buffer[i])
+            return -1;
+    }
+
     // Start at root directory
     cwd_inode = ROOT_INODE;
-
     init_done = true;
     return 0;
 }

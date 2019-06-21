@@ -98,8 +98,9 @@ void print_path(struct t2fs_path *path_info)
 
 // All are initialized in init_t2fs
 struct t2fs_superblock superblock;
-u32 cwd_inode;
 byte_t *block_buffer;
+u32 *idx_block_buffer[NUM_INDIRECT_LVL];
+u32 cwd_inode;
 
 
 /************************************

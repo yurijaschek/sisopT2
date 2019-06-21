@@ -16,7 +16,6 @@
 
 #include "libt2fs.h"
 #include <stdarg.h>
-#include <stdlib.h>
 #include <string.h>
 
 
@@ -238,6 +237,11 @@ int insert_entry(u32 dir_inode, char *name, u32 inode)
         u32 block = allocate_new_block(dir_inode);
         if(block == 0)
             return -1;
+
+        memset(block_buffer, 0, superblock.block_size);
+        res = t2fs_write_block(block_buffer, block);
+        if(res != 0)
+            return res;
         // Insert specifically in this block, since previous ones are full
         res = call_directly(block_insert_entry, block, name, inode);
     }

@@ -16,7 +16,6 @@
 
 #include "libt2fs.h"
 #include <stdarg.h>
-#include <stdlib.h>
 #include <string.h>
 
 
@@ -136,28 +135,25 @@ static int iterate_indirection(u32 block, int level,
     if(level == 0)
         return fn(block, args);
 
-    byte_t *data = malloc(superblock.block_size);
-    if(!data)
-        return -1;
-    int res = t2fs_read_block(data, block);
+    u32 *buffer = idx_block_buffer[level-1];
+    int res = t2fs_read_block((byte_t*)buffer, block);
     if(res != 0)
         return res;
 
     int num_iter = superblock.block_size / sizeof(u32);
-    u32 *it = (u32*)data;
     for(int i=0; i<num_iter; i++)
     {
         res = 1;
-        if(it[i] == 0)
+        if(buffer[i] == 0)
             break;
         va_list a;
         va_copy(a, args);
-        res = iterate_indirection(it[i], level-1, fn, a);
+        res = iterate_indirection(buffer[i], level-1, fn, a);
         if(res <= 0)
             break;
     }
-    free(data);
-    return 0;
+
+    return res;
 }
 
 
@@ -177,9 +173,7 @@ static u32 allocate_indirect(u32 *block, int level, u32 count)
 {
     if(level > 0) // block is index block pointer
     {
-        byte_t *buffer = malloc(superblock.block_size);
-        if(!buffer)
-            return 0;
+        u32 *buffer = idx_block_buffer[level-1];
 
         if(*block == 0) // Index block unallocated
         {
@@ -190,17 +184,17 @@ static u32 allocate_indirect(u32 *block, int level, u32 count)
         }
         else
         {
-            if(t2fs_read_block(buffer, *block) != 0)
+            if(t2fs_read_block((byte_t*)buffer, *block) != 0)
                 return 0;
         }
 
         u32 level_blocks = 1;
         for(int i=0; i<level-1; i++)
             level_blocks *= superblock.block_size / sizeof(u32);
-        u32 ans = allocate_indirect(&((u32*)buffer)[count/level_blocks],
+        u32 ans = allocate_indirect(&buffer[count/level_blocks],
                                     level-1, count % level_blocks);
 
-        if(t2fs_write_block(buffer, *block) != 0)
+        if(t2fs_write_block((byte_t*)buffer, *block) != 0)
             return 0;
 
         return ans;
@@ -240,22 +234,20 @@ static int deallocate_indirect(u32 *block, int level, u32 *count)
     }
     else // block is index block pointer
     {
-        byte_t *buffer = malloc(superblock.block_size);
-        if(!buffer)
-            return -1;
+        u32 *buffer = idx_block_buffer[level-1];
 
-        res = t2fs_read_block(buffer, *block);
+        res = t2fs_read_block((byte_t*)buffer, *block);
         if(res != 0)
             return res;
 
         for(int i=superblock.block_size/sizeof(u32)-1; i>=0 && *count>0; i--)
         {
-            res = deallocate_indirect(&((u32*)buffer)[i], level-1, count);
+            res = deallocate_indirect(&buffer[i], level-1, count);
             if(res != 0)
                 return res;
         }
 
-        if(((u32*)buffer)[0] == 0) // Empty index block
+        if(buffer[0] == 0) // Empty index block
         {
             operate_bitmap(*block, false, 0);
             if(res != 0)
@@ -264,7 +256,7 @@ static int deallocate_indirect(u32 *block, int level, u32 *count)
         }
         else
         {
-            res = t2fs_write_block(buffer, *block);
+            res = t2fs_write_block((byte_t*)buffer, *block);
             if(res != 0)
                 return res;
         }
@@ -370,8 +362,6 @@ u32 allocate_new_block(u32 inode)
         ans = allocate_indirect(&inode_s.pointers[inode_s.num_blocks], 0, 0);
     else // Need to check indirect pointers
     {
-        if(NUM_INDIRECT_LVL == 0) // No indirection
-            return 0;
         u32 rem_blocks = inode_s.num_blocks - NUM_DIRECT_PTR;
         u32 level_blocks = 1;
         for(int i=0; i<NUM_INDIRECT_LVL; i++)

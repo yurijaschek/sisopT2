@@ -38,10 +38,11 @@
  ***********************************/
 
 // Changeable
-#define T2FS_USE_CACHE   1 // 0 = false; 1 = true
-#define T2FS_SIGNATURE   "os sisopeiros" // Magic string in the superblock
-#define NUM_DIRECT_PTR   3  // Number of direct block pointers in inode
-#define NUM_INDIRECT_LVL 3  // 0 = direct-only; 1 = singly; 2 = doubly; etc
+#define T2FS_USE_CACHE    1 // 0 = false; 1 = true
+#define T2FS_SIGNATURE    "os sisopeiros" // Magic string in the superblock
+#define NUM_DIRECT_PTR    3 // Number of direct block pointers in inode
+#define NUM_INDIRECT_LVL  3 // 0 not allowed. 1 = singly; 2 = doubly; etc
+#define INODES_SECTOR_PCT 1.0 // % of sectors reserved for inodes
 
 // Unchangeable / fixed
 #define ROOT_INODE       1U // Number of the root directory inode (must be 1)
@@ -200,7 +201,8 @@ void print_path(struct t2fs_path *path_info);
 
 // All these variables are defined in t2fs.c
 extern struct t2fs_superblock superblock; // To hold management information
-extern byte_t *block_buffer; // To read data (directories and links) from disk
+extern byte_t *block_buffer; // To read data blocks from disk
+extern u32 *idx_block_buffer[NUM_INDIRECT_LVL]; // For index blocks
 extern u32 cwd_inode; // Inode number of the current working directory
 
 

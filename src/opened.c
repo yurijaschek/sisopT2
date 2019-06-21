@@ -15,7 +15,6 @@
  */
 
 #include "libt2fs.h"
-#include <stdlib.h>
 #include <string.h>
 
 
@@ -37,20 +36,18 @@ static u32 get_nth_block_indirect(u32 *block, int level, int count)
 {
     if(level > 0) // block is index block pointer
     {
-        byte_t *buffer = malloc(superblock.block_size);
-        if(!buffer)
-            return 0;
+        u32 *buffer = idx_block_buffer[level-1];
 
         if(*block == 0) // Index block unallocated
             return 0;
-        if(t2fs_read_block(buffer, *block) != 0)
+        if(t2fs_read_block((byte_t*)buffer, *block) != 0)
             return 0;
 
         u32 level_blocks = 1;
         for(int i=0; i<level-1; i++)
             level_blocks *= superblock.block_size / sizeof(u32);
 
-        return get_nth_block_indirect(&((u32*)buffer)[count/level_blocks],
+        return get_nth_block_indirect(&buffer[count/level_blocks],
                                       level-1, count % level_blocks);
     }
     else // block is data block pointer
@@ -71,9 +68,6 @@ static u32 get_nth_block(struct t2fs_inode *inode, int n)
 {
     if(n < NUM_DIRECT_PTR)
         return inode->pointers[n];
-
-    if(NUM_INDIRECT_LVL == 0) // No indirection
-        return 0;
 
     u32 rem_blocks = n - NUM_DIRECT_PTR;
     u32 level_blocks = 1;
