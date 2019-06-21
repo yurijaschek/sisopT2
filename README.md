@@ -28,9 +28,9 @@ The proposed file system has the following characteristics:
 To compile the library `libt2fs.a`, enter `make all` in the root directory of the repository.
 
 Alternatively, to compile for x86_64, enter `make all64`. That will use the student-made `bin/apidisk.c` source instead of the professor-provided `lib/apidisk.o`.
-There is no guarantee `bin/apidisk.c` has `lib/apidisk.o`'s functionalities fully implemented and 100% correct.
+There is no guarantee `lib/apidisk.c` has `lib/apidisk.o`'s functionalities fully implemented and 100% correct.
 
-To compile all the programs inside `exemplos/` or `testes/`, you can enter `make all` inside the desired directory.
+To compile all the programs inside `exemplo/` or `teste/`, you can enter `make all` inside the desired directory.
 
 Alternatively, you can compile the programs of your choice by entering `make this_one`, having a `this_one.c` or `this_one.cpp` file in the directory.
 
@@ -43,9 +43,9 @@ More information is available (in Portuguese) in the files inside the `material/
 Files created (not provided):
 
 1. `src/*`
-2. `testes/*`
+2. `teste/*`
 3. `Makefile`s
-4. `bin/apidisk.c`
+4. `lib/apidisk.c`
 
 By:
 
