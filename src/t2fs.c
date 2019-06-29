@@ -117,18 +117,18 @@ static struct t2fs_descriptor *fd; // To get descriptors for files
 
 int identify2 (char *name, int size)
 {
-    char comp[][2][32] =
+    char comp[][32] =
     {
-        {"00231592", "Yuri Jaschek"},
-        {"00243451", "Giovane Fonseca"},
-        {"00242308", "Humberto Lentz"},
-        {"00274744", "Matheus F. Kovaleski"},
+        "Yuri Jaschek",
+        "Giovane Fonseca",
+        "Humberto Lentz",
+        "Matheus F. Kovaleski",
     };
 
     for(int i=0; i<ARRAY_SIZE(comp); i++)
     {
-        int n = snprintf(name, size, "{\"%s\", \"%s\"}%s", comp[i][1],
-                         comp[i][0], i == ARRAY_SIZE(comp)-1 ? "" : ", ");
+        int n = snprintf(name, size, "{\"%s\"}%s", comp[i],
+                         i == ARRAY_SIZE(comp)-1 ? "" : ", ");
         name += n;
         size -= n;
         if(size <= 0)
