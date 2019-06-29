@@ -81,8 +81,10 @@ typedef unsigned int DWORD;
 
 /*-----------------------------------------------------------------------------
 Funct:  Copy the developers' identification to the given buffer.
+
 Input:  name -> Buffer to copy the information to
         size -> Size of the buffer, not to be exceeded
+
 Return: On success, 0 is returned. Otherwise, a non-zero value is returned.
 -----------------------------------------------------------------------------*/
 int identify2 (char *name, int size);
