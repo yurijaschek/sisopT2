@@ -15,12 +15,13 @@ Help links to terminal raw input and output:
 https://viewsourcecode.org/snaptoken/kilo/index.html
 http://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html
 
- */
+*/
 
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -48,8 +49,8 @@ enum keys
     KEY_CTRL_DEL,
     KEY_UP,
     KEY_DOWN,
-    KEY_LEFT,
     KEY_RIGHT,
+    KEY_LEFT,
     KEY_CTRL_LEFT,
     KEY_CTRL_RIGHT,
 };
@@ -131,25 +132,44 @@ Input:  buffer -> A null-terminated string containing an escaped sequence.
 Return: The corresponding int code, according to 'keys' enum.
         If a sequence is not supported, KEY_NONE will be returned.
 -----------------------------------------------------------------------------*/
-static int getEscSequence(unsigned char *buffer)
+static int getEscSequence(char *buffer)
 {
-    (void)buffer;
+#if 0
+    int n = strlen(buffer);
+    for(int i=0; i<n; i++)
+        printf("%d\n", buffer[i]);
+#endif
+    if(strcmp(buffer, "\e[A") == 0)
+        return KEY_UP;
+    if(strcmp(buffer, "\e[B") == 0)
+        return KEY_DOWN;
+    if(strcmp(buffer, "\e[C") == 0)
+        return KEY_RIGHT;
+    if(strcmp(buffer, "\e[D") == 0)
+        return KEY_LEFT;
+    if(strcmp(buffer, "\e[3~") == 0)
+        return KEY_DELETE;
     return KEY_NONE;
 }
 
 
 /*-----------------------------------------------------------------------------
 Funct:  Wait for a keyboard key press and return it.
-Return: If an error occurred or the key press couldn't be identified, KEY_NONE
-            is returned.
-        If an escaped sequence was read, it is returned, according to 'keys'
-            enum, having a value > 255.
+Input:  processEsc -> If this function should process escaped sequences or not
+        buffer     -> The buffer in which the esc sequence should be returned
+                      If processEsc is true, then this should be valid
+Return: If an error occurred or the key press couldn't be identified if
+            processEsc is true, KEY_NONE is returned.
+        If an escaped sequence was read and processEsc is true, the sequence
+            is returned, according to 'keys' enum, having a value > 255.
+        Otherwise, if processEsc is false, the sequence is copied to the given
+            buffer.
         Else, the ASCII character read is returned.
 -----------------------------------------------------------------------------*/
-static int getKeyPress()
+static int getKeyPress(bool processEsc, char *sequence)
 {
-    const int sz = 8; // Max sequence is probably 6
-    unsigned char buffer[sz] = {};
+    const int sz = 16; // Max sequence is probably 6
+    char buffer[sz] = {};
     // Discard previous key strokes
     if(tcflush(STDIN_FILENO, TCIFLUSH) == -1)
         die("tcflush");
@@ -164,12 +184,32 @@ static int getKeyPress()
         return KEY_NONE;
 
     int ans;
-    if(buffer[0] == '\e') // Escape sequence
+    if(buffer[0] != '\e')
+        ans = max('\0', buffer[0]);
+    // Escaped sequence now
+    else if(processEsc)
         ans = getEscSequence(buffer);
     else
-        ans = min((int)buffer[0], 127);
-
+    {
+        ans = KEY_NONE;
+        strcpy(sequence, buffer);
+    }
     return ans;
+}
+
+
+/*-----------------------------------------------------------------------------
+-----------------------------------------------------------------------------*/
+static void getCursorPosition(int *row, int *col)
+{
+    char buffer[16];
+    *row = 0; *col = 0;
+    printf("\e[6n");
+    fflush(stdout);
+    getKeyPress(false, buffer);
+    // buffer should now have the cursor position in format "\e[n;mR", where
+    // 'n' and 'm' are the row and collumn, respectively
+    sscanf(buffer, "\e[%d;%dR", row, col);
 }
 
 
@@ -190,23 +230,59 @@ static string getCommandLine()
     history.push_back(""); // New entry for this prompt
     const int len = history.size();
     int hist_idx = len-1, word_idx = 0;
+    int row, col;
+    printf("\e[s"); // Saves cursor position
+    getCursorPosition(&row, &col);
     bool done = false;
+
     while(!done)
     {
         string str_aux;
-        fflush(stdout);
-        int ch = getKeyPress();
-        bool regchar = ch >= ' ' && ch < 128;
-        if(regchar)
+        int num_sp = history[hist_idx].size();
+        int ch = getKeyPress(true, NULL);
+        if(ch >= ' ' && ch < 127) // Regular printable character
         {
             str_aux = history[hist_idx];
             history[hist_idx].insert(word_idx++, 1, ch);
-            printf("%c", ch);
         }
         else switch(ch)
         {
             case KEY_ENTER:
                 done = true;
+                break;
+            case KEY_RIGHT:
+                word_idx = min(word_idx+1, (int)history[hist_idx].size());
+                break;
+            case KEY_LEFT:
+                word_idx = max(0, word_idx-1);
+                break;
+            case KEY_UP:
+                if(hist_idx != 0)
+                {
+                    hist_idx--;
+                    word_idx = history[hist_idx].size();
+                }
+                break;
+            case KEY_DOWN:
+                if(hist_idx != len-1)
+                {
+                    hist_idx++;
+                    word_idx = history[hist_idx].size();
+                }
+                break;
+            case KEY_BACKSPACE:
+                if(word_idx > 0)
+                {
+                    str_aux = history[hist_idx];
+                    history[hist_idx].erase(--word_idx, 1);
+                }
+                break;
+            case KEY_DELETE:
+                if(word_idx < (int)history[hist_idx].size())
+                {
+                    str_aux = history[hist_idx];
+                    history[hist_idx].erase(word_idx, 1);
+                }
                 break;
             default:;
         }
@@ -217,6 +293,16 @@ static string getCommandLine()
             if(original.find(hist_idx) == original.end())
                 original[hist_idx] = str_aux;
         }
+
+        // Get terminal dimensions
+        struct winsize ws;
+        ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
+
+        // Update output
+        printf("\e[u"); // Restore previously saved cursor position
+        printf("%s %d %d", history[hist_idx].c_str(), row, col);
+        printf("\e[J"); // Clear terminal from cursor to end of screen
+        fflush(stdout);
     }
 
     string ans = history[hist_idx];
@@ -307,7 +393,7 @@ int main()
     {
         enableRawMode(); // For advanced user input
         printf("Welcome to T2FS shell!\n");
-//        FUNC_NAME(FN_MAN)({"man"}); // Call the shell's manual
+        FUNC_NAME(FN_MAN)({"man"}); // Call the shell's manual
     }
 
     for(;;)
@@ -318,6 +404,7 @@ int main()
         {
             printf("%s@%s:", user_info, host_info);
             printf("%s$ ", cwd_path.c_str());
+            fflush(stdout);
             cmd_line = getCommandLine();
         }
         else // "Script" shell
