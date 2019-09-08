@@ -42,6 +42,7 @@ enum functions // Functions in the terminal
     FN_CP,
     FN_CREATE,
     FN_EXIT,
+    FN_FORMAT,
     FN_FSCP,
     FN_LN,
     FN_LS,
@@ -68,6 +69,7 @@ DECL_FUNC(FN_CMP);
 DECL_FUNC(FN_CP);
 DECL_FUNC(FN_CREATE);
 DECL_FUNC(FN_EXIT);
+DECL_FUNC(FN_FORMAT);
 DECL_FUNC(FN_FSCP);
 DECL_FUNC(FN_LN);
 DECL_FUNC(FN_LS);
@@ -92,7 +94,7 @@ struct Function
     std::string desc; // Description string
 };
 
-// List of erminal functions
+// List of terminal functions
 const std::map<int,Function> fn_lst =
 {
     ADD_TO_MAP(FN_ABOUT,  "%s",
@@ -112,6 +114,9 @@ const std::map<int,Function> fn_lst =
                           "Create a new file"),
     ADD_TO_MAP(FN_EXIT,   "%s",
                           "Exit this shell"),
+    ADD_TO_MAP(FN_FORMAT, "%s number",
+                          "Format the partition 0 using number sectors per block\n" \
+                          "Note that \"t2fs_disk.dat\" must be in the same directory as this shell"),
     ADD_TO_MAP(FN_FSCP,   "%s {-f | -t} file1 file2",
                           "Copy a file between filesystems\n" \
                           "-f copies existing file1 in T2FS to file2 in HostFS\n" \
@@ -162,6 +167,7 @@ const std::map<std::string,int> cmd_lst =
     {"cp", FN_CP}, {"copy", FN_CP},
     {"create", FN_CREATE},
     {"exit", FN_EXIT}, {"quit", FN_EXIT}, {"q", FN_EXIT},
+    {"format", FN_FORMAT}, {"fmt", FN_FORMAT},
     {"fscp", FN_FSCP},
     {"ln", FN_LN}, {"link", FN_LN},
     {"ls", FN_LS}, {"dir", FN_LS},

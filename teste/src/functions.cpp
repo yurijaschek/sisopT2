@@ -86,7 +86,7 @@ int getHandle(string path, bool dir, bool crt)
                      : (crt ? create2(buffer) : open2(buffer));
     if(handle < 0)
         return setError(handle, "%s: %s %s", path.c_str(),
-                        dir ? "directory" : "file",
+                        dir ? "directory" : "regular file",
                         crt ? "could not be created" : "does not exist");
     return handle;
 }
@@ -140,7 +140,8 @@ int readBytes(int handle, char *buffer, int len)
 {
     int res = read2(handle, buffer, len);
     if(res < 0)
-        return setError(res, "error while trying to read %d byte%s from file handle %d", len, len == 1 ? "" : "s", handle);
+        return setError(res, "error while trying to read %d byte%s from file "
+                        "handle %d", len, len == 1 ? "" : "s", handle);
     return res;
 }
 
@@ -205,8 +206,8 @@ void hexDump(char *buffer, int len, int counter)
 Funct:  Each function performs a task at the terminal.
 Input:  args -> Vector of strings, arguments to the function
 Return: Unless noted, a return value of 0 means the command went well.
-        Otherwise, if it has been set, the error message should be printed by
-            the caller.
+        Otherwise, if it has been set, the error message contains more
+            information about the error.
 -----------------------------------------------------------------------------*/
 
 // TODO: Review READ, WRITE
@@ -290,14 +291,14 @@ DECL_FUNC(FN_CMP)
         return printUsage(args[0]);
     int handle1 = getHandle(args[1], false, false);
     if(handle1 < 0)
-        return setError(handle1, "open: ");
+        return setError(handle1, "");
     int handle2 = getHandle(args[2], false, false);
     if(handle2 < 0)
     {
         string aux = error_msg;
         closeFile(handle1, false);
         error_msg = aux;
-        return setError(handle2, "open: ");
+        return setError(handle2, "");
     }
     int bytes1, bytes2;
     char buffer1[1024], buffer2[1024];
@@ -306,23 +307,29 @@ DECL_FUNC(FN_CMP)
     while(ans == 0)
     {
         bytes1 = readBytes(handle1, buffer1, sizeof(buffer1));
-        bytes2 = readBytes(handle2, buffer2, sizeof(buffer2));
-        if(bytes1 < 0 || bytes2 < 0)
-            ans = bytes1;
-        else if(bytes1 != bytes2)
-            ans = 1;
-        else
+        if(bytes1 < 0)
         {
-            if(bytes1 == 0) break; // Files are equal!
-            for(int i=0; i<bytes1; i++)
+            ans = bytes1;
+            break;
+        }
+        bytes2 = readBytes(handle2, buffer2, sizeof(buffer2));
+        if(bytes2 < 0)
+        {
+            ans = bytes2;
+            break;
+        }
+        if(bytes1 != bytes2)
+            ans = 2;
+        else if(bytes1 == 0)
+            break; // Files are equal!
+        else for(int i=0; i<bytes1; i++)
+        {
+            if(buffer1[i] != buffer2[i])
             {
-                if(buffer1[i] != buffer2[i])
-                {
-                    ans = 1;
-                    break;
-                }
-                read++;
+                ans = 1;
+                break;
             }
+            read++;
         }
     }
     string aux = error_msg;
@@ -330,8 +337,11 @@ DECL_FUNC(FN_CMP)
     closeFile(handle2, false);
     error_msg = aux;
     if(ans == 1)
-        return setError(1, "%s %s differ: byte %d", args[1].c_str(),
-                        args[2].c_str(), read);
+        printf("%s %s differ: byte %d", args[1].c_str(),
+                        args[2].c_str(), read+1);
+    if(ans == 2)
+        printf("%s %s differ in size", args[1].c_str(),
+                                       args[2].c_str());
     return ans;
 }
 
@@ -369,6 +379,7 @@ DECL_FUNC(FN_CP)
         if(rb != wb)
         {
             ans = setError(-1, "I/O error");
+            break;
         }
     }
     string aux = error_msg;
@@ -396,9 +407,21 @@ DECL_FUNC(FN_CREATE)
 
 DECL_FUNC(FN_EXIT)
 {
-    if(args.size() != 1)
-        return printUsage(args[0]);
+    (void)args;
     return 0;
+}
+
+DECL_FUNC(FN_FORMAT)
+{
+    if(args.size() != 2)
+        return printUsage(args[0]);
+    int num_sectors = 0;
+    if(stringToInt(args[1], &num_sectors) != 0)
+        return setError(-1, "invalid num_sectors: ");
+    int ans = format2(num_sectors);
+    if(ans != 0)
+        return setError(ans, "could not format t2fs_disk.dat");
+    return ans;
 }
 
 DECL_FUNC(FN_FSCP)
@@ -431,7 +454,7 @@ DECL_FUNC(FN_LS)
         dir = ".";
     int handle = getHandle(dir, true, false);
     if(handle < 0)
-        return setError(handle, "opendir: ");
+        return setError(handle, "");
     DIRENT2 entry;
     vector<DIRENT2> entries;
     unsigned int max_size = 0;
@@ -447,8 +470,7 @@ DECL_FUNC(FN_LS)
         t = t == FILETYPE_DIRECTORY ? 'd'
                                     : (t == FILETYPE_SYMLINK ? 'l' : '-');
         printf("%c  %*d  ", t, max_size, entries[i].fileSize);
-        printf("%s", entries[i].name);
-        printf("\n");
+        printf("%s\n", entries[i].name);
     }
     return closeFile(handle, true);
 }
@@ -460,6 +482,7 @@ DECL_FUNC(FN_MAN)
         printf("To view the list of commands, enter \"cmd\"\n");
         printf("To get help on a specific command, enter \"%s command\"\n",
                args[0].c_str());
+        printf("If you haven't already done so, please remember to \"format\" the t2fs_disk.dat\n");
         return 0;
     }
     if(args.size() != 2)
@@ -472,6 +495,11 @@ DECL_FUNC(FN_MAN)
     return 0;
 }
 
+
+/*-----------------------------------------------------------------------------
+Return: If successful, the handle is returned (> 0).
+        Otherwise, an error is returned (< 0).
+-----------------------------------------------------------------------------*/
 DECL_FUNC(FN_MKDIR)
 {
     if(args.size() != 2)
