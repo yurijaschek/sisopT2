@@ -8,15 +8,6 @@
  *                                                                           *
  *****************************************************************************/
 
-/*
-
-Help links to terminal raw input and output:
-
-https://viewsourcecode.org/snaptoken/kilo/index.html
-http://www.lihaoyi.com/post/BuildyourownCommandLinewithANSIescapecodes.html
-
-*/
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -199,16 +190,19 @@ static int getKeyPress(bool processEsc, char *sequence)
 
 
 /*-----------------------------------------------------------------------------
+Funct:  Query the terminal for the current cursor position.
+Input:  row -> Pointer to return the cursor row position
+        col -> Pointer to return the cursor column position
 -----------------------------------------------------------------------------*/
 static void getCursorPosition(int *row, int *col)
 {
     char buffer[16];
     *row = 0; *col = 0;
     printf("\e[6n");
-    fflush(stdout);
+    fflush(stdout); // For response to be available immediately
     getKeyPress(false, buffer);
     // buffer should now have the cursor position in format "\e[n;mR", where
-    // 'n' and 'm' are the row and collumn, respectively
+    // 'n' and 'm' are the row and column, respectively
     sscanf(buffer, "\e[%d;%dR", row, col);
 }
 
@@ -224,21 +218,26 @@ Return: A string that contains the text typed by the user in the terminal.
 -----------------------------------------------------------------------------*/
 static string getCommandLine()
 {
+    /*
+     *  TODO
+     *  - Deal with terminal resizing
+     *  - Deal with input string longer than the terminal screen
+     */
+
     static vector<string> history; // Terminal commands history
     // To preserve history entries, since they can be modified in-place
     map<int,string> original;
     history.push_back(""); // New entry for this prompt
     const int len = history.size();
     int hist_idx = len-1, word_idx = 0;
-    int row, col;
-    printf("\e[s"); // Saves cursor position
-    getCursorPosition(&row, &col);
     bool done = false;
+
+    int row, col; // Beginning of editable text
+    getCursorPosition(&row, &col);
 
     while(!done)
     {
         string str_aux;
-        int num_sp = history[hist_idx].size();
         int ch = getKeyPress(true, NULL);
         if(ch >= ' ' && ch < 127) // Regular printable character
         {
@@ -289,7 +288,7 @@ static string getCommandLine()
 
         if(str_aux != "") // History was modified
         {
-            // Only if it's not already saved
+            // Only if it wasn't saved before
             if(original.find(hist_idx) == original.end())
                 original[hist_idx] = str_aux;
         }
@@ -298,10 +297,25 @@ static string getCommandLine()
         struct winsize ws;
         ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
 
-        // Update output
-        printf("\e[u"); // Restore previously saved cursor position
-        printf("%s %d %d", history[hist_idx].c_str(), row, col);
+        // Write output
+        printf("\e[%d;%dH", row, col); // Move cursor
+        int num_char = col + history[hist_idx].size();
+        int num_lines = (num_char-1)/ ws.ws_col;
+        if(row + num_lines > ws.ws_row)
+            row = ws.ws_row - num_lines;
+        printf("%s ", history[hist_idx].c_str());
         printf("\e[J"); // Clear terminal from cursor to end of screen
+
+        // Position cursor
+        printf("\e[%d;%dH", row, 1); // Move cursor
+        int cursor_down = (col+word_idx-1) / ws.ws_col;
+        if(cursor_down > 0)
+            printf("\e[%dB", cursor_down); // Move cursor down
+        int cursor_right = (col+word_idx-1) % ws.ws_col;
+        if(cursor_right)
+            printf("\e[%dC", cursor_right); // Move cursor forward
+
+        // Update output
         fflush(stdout);
     }
 
