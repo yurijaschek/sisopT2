@@ -172,7 +172,6 @@ Input:  buffer  -> Buffer that holds the data to be printed
 -----------------------------------------------------------------------------*/
 void hexDump(char *buffer, int len, int counter)
 {
-
     for(int i=0; i<len; i+=16)
     {
         printf("%08x", i+counter);
@@ -187,12 +186,7 @@ void hexDump(char *buffer, int len, int counter)
         }
         printf("  |");
         for(int j=0; j<16; j++)
-        {
-            if(i+j < len)
-                printf("%c", printable(buffer[i+j]));
-            else
-                printf(" ");
-        }
+            printf("%c", printable(i+j < len ? buffer[i+j] : ' '));
         printf("|\n");
     }
 }
@@ -210,8 +204,6 @@ Return: Unless noted, a return value of 0 means the command went well.
             information about the error.
 -----------------------------------------------------------------------------*/
 
-// TODO: Review READ, WRITE
-// TODO: Implement FSCP, MV
 
 DECL_FUNC(FN_ABOUT)
 {
@@ -426,6 +418,7 @@ DECL_FUNC(FN_FORMAT)
 
 DECL_FUNC(FN_FSCP)
 {
+    // TODO: Implement
     (void)args; return 0;
 }
 
@@ -509,6 +502,7 @@ DECL_FUNC(FN_MKDIR)
 
 DECL_FUNC(FN_MV)
 {
+    // TODO: Implement
     (void)args; return 0;
 }
 
@@ -544,14 +538,14 @@ DECL_FUNC(FN_READ)
 {
     if(args.size() != 3)
         return printUsage(args[0]);
-    int handle = 0, bytes = 1;
+    int handle = 0, bytes = 0;
     if(stringToInt(args[1], &handle) != 0)
         return setError(-1, "invalid handle: ");
-    if(stringToInt(args[2], &bytes) != 0 || bytes <= 0)
-        return setError(-1, "invalid # of bytes%s", bytes <= 0 ? "" : ": ");
+    if(stringToInt(args[2], &bytes) != 0 || bytes < 0)
+        return setError(-1, "invalid # of bytes%s", (bytes < 0 ? "" : ": "));
     char buffer[1024];
     int read = 0;
-    int res = 0;
+    int res;
     for(;;)
     {
         if(read >= bytes)
@@ -657,11 +651,12 @@ DECL_FUNC(FN_WRITE)
         }
     }
     else return setError(-1, "%s: invalid option", args[2].c_str());
-    int res = writeBytes(handle, &data[0], data.size());
+    int res = 0;
+    if(data.size() > 0)
+        res = writeBytes(handle, &data[0], data.size());
     if(res == 0)
         printf("No bytes written to file handle %d\n", handle);
-    if(res > 0)
+    else if(res > 0)
         printf("%d byte%s written to file handle %d\n", res, res == 1 ? "" : "s", handle);
     return res;
 }
-
