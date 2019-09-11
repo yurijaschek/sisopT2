@@ -215,13 +215,9 @@ DECL_FUNC(FN_ABOUT)
 
 DECL_FUNC(FN_CD)
 {
-    if(args.size() > 2)
+    if(args.size() != 2)
         return printUsage(args[0]);
-    string dir;
-    if(args.size() == 2)
-        dir = args[1];
-    else
-        dir = "/";
+    string dir = args[1];
     char buffer[MAX_PATH_SIZE];
     strncpy(buffer, dir.c_str(), sizeof(buffer));
     if(chdir2(buffer) != 0)
@@ -418,8 +414,71 @@ DECL_FUNC(FN_FORMAT)
 
 DECL_FUNC(FN_FSCP)
 {
-    // TODO: Implement
-    (void)args; return 0;
+    if(args.size() != 4)
+        return printUsage(args[0]);
+    bool fromT2FS;
+    int handle;
+    FILE *fp = 0;
+    // Setup
+    if(args[1] == "-f") // T2FS to HostFS
+    {
+        fromT2FS = true;
+        handle = getHandle(args[2], false, false);
+        if(handle < 0)
+            return setError(handle, "in T2FS, ");
+        if(access(args[3].c_str(), F_OK) != -1)
+            return setError(-1, "%s already exists in HostFS", args[3].c_str());
+        fp = fopen(args[3].c_str(), "wb");
+        if(!fp)
+            return setError(-1, "Couldn't create %s in HostFS", args[3].c_str());
+    }
+    else if(args[1] == "-t") // HostFS to T2FS
+    {
+        fromT2FS = false;
+        fp = fopen(args[2].c_str(), "rb");
+        if(!fp)
+            return setError(-1, "Couldn't open %s in HostFS", args[2].c_str());
+        handle = getHandle(args[3], false, true);
+        if(handle < 0)
+            return setError(handle, "in T2FS, ");
+    }
+    else
+        return setError(-1, "%s: invalid option", args[1].c_str());
+
+    // Transfer
+    int bytes = 0;
+    for(;;)
+    {
+        char buffer[1024];
+        int res_r, res_w;
+        // Read
+        if(fromT2FS)
+            res_r = readBytes(handle, buffer, sizeof(buffer));
+        else
+            res_r = fread(buffer, 1, sizeof(buffer), fp);
+        // Read validation
+        if(res_r < 0)
+            return setError(res_r, "error while reading %s file %s",
+                            fromT2FS ? "T2FS" : "HostFS", args[2].c_str());
+        if(res_r > sizeof(buffer))
+            return setError(res_r, "extraneous value returned by read function");
+        if(res_r == 0) break; // No more bytes to transfer
+        // Write
+        if(fromT2FS)
+            res_w = fwrite(buffer, 1, res_r, fp);
+        else
+            res_w = writeBytes(handle, buffer, res_r);
+        // Write validation
+        if(res_w < 0)
+            return setError(res_w, "error while writing %s file %s",
+                            fromT2FS ? "HostFS" : "T2FS", args[3].c_str());
+        if(res_w > res_r)
+            return setError(res_w, "extraneous value returned by write function");
+        if(res_w != res_r)
+            return setError(-1, "could not copy the entire file");
+        if(res_w < sizeof(buffer)) break; // No more bytes to transfer
+    }
+    return 0;
 }
 
 DECL_FUNC(FN_LN)
@@ -500,11 +559,11 @@ DECL_FUNC(FN_MKDIR)
     return getHandle(args[1], true, true);
 }
 
-DECL_FUNC(FN_MV)
-{
-    // TODO: Implement
-    (void)args; return 0;
-}
+// DECL_FUNC(FN_MV)
+// {
+//     // TODO: Implement
+//     (void)args; return 0;
+// }
 
 
 /*-----------------------------------------------------------------------------

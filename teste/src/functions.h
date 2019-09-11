@@ -75,7 +75,7 @@ DECL_FUNC(FN_LN);
 DECL_FUNC(FN_LS);
 DECL_FUNC(FN_MAN);
 DECL_FUNC(FN_MKDIR);
-DECL_FUNC(FN_MV);
+// DECL_FUNC(FN_MV);
 DECL_FUNC(FN_OPEN);
 DECL_FUNC(FN_PWD);
 DECL_FUNC(FN_READ);
@@ -99,9 +99,8 @@ const std::map<int,Function> fn_lst =
 {
     ADD_TO_MAP(FN_ABOUT,  "%s",
                           "Display information about this shell"),
-    ADD_TO_MAP(FN_CD,     "%s [directory]",
-                          "Change the current working directory\n" \
-                          "If no directory is given, root (/) is assumed"),
+    ADD_TO_MAP(FN_CD,     "%s directory",
+                          "Change the current working directory\n"),
     ADD_TO_MAP(FN_CLOSE,  "%s handle",
                           "Close an opened file, given its handle"),
     ADD_TO_MAP(FN_CMD,    "%s",
@@ -130,8 +129,8 @@ const std::map<int,Function> fn_lst =
                           "Display manual information for commands"),
     ADD_TO_MAP(FN_MKDIR,  "%s directory",
                           "Create a new directory"),
-    ADD_TO_MAP(FN_MV,     "%s src dst",
-                          "Move a file from source to destiny"),
+    // ADD_TO_MAP(FN_MV,     "%s src dst",
+    //                       "Move a file from source to destiny"),
     ADD_TO_MAP(FN_OPEN,   "%s file",
                           "Open an existing file"),
     ADD_TO_MAP(FN_PWD,    "%s",
