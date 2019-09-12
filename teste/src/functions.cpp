@@ -590,12 +590,6 @@ DECL_FUNC(FN_MKDIR)
     return getHandle(args[1], true, true);
 }
 
-// DECL_FUNC(FN_MV)
-// {
-//     // TODO: Implement
-//     (void)args; return 0;
-// }
-
 
 /*-----------------------------------------------------------------------------
 Return: If successful, the handle is returned (> 0).

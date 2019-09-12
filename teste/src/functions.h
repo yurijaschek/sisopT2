@@ -48,7 +48,6 @@ enum functions // Functions in the terminal
     FN_LS,
     FN_MAN,
     FN_MKDIR,
-    FN_MV,
     FN_OPEN,
     FN_PWD,
     FN_READ,
@@ -75,7 +74,6 @@ DECL_FUNC(FN_LN);
 DECL_FUNC(FN_LS);
 DECL_FUNC(FN_MAN);
 DECL_FUNC(FN_MKDIR);
-// DECL_FUNC(FN_MV);
 DECL_FUNC(FN_OPEN);
 DECL_FUNC(FN_PWD);
 DECL_FUNC(FN_READ);
@@ -129,8 +127,6 @@ const std::map<int,Function> fn_lst =
                           "Display manual information for commands"),
     ADD_TO_MAP(FN_MKDIR,  "%s directory",
                           "Create a new directory"),
-    // ADD_TO_MAP(FN_MV,     "%s src dst",
-    //                       "Move a file from source to destiny"),
     ADD_TO_MAP(FN_OPEN,   "%s file",
                           "Open an existing file"),
     ADD_TO_MAP(FN_PWD,    "%s",
@@ -172,7 +168,6 @@ const std::map<std::string,int> cmd_lst =
     {"ls", FN_LS}, {"dir", FN_LS},
     {"man", FN_MAN}, {"help", FN_MAN},
     {"mkdir", FN_MKDIR},
-    {"mv", FN_MV}, {"move", FN_MV},
     {"open", FN_OPEN},
     {"pwd", FN_PWD}, {"cwd", FN_PWD},
     {"read", FN_READ},
