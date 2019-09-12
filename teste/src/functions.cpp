@@ -13,6 +13,7 @@
  */
 
 #include <math.h>
+#include <stdarg.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
@@ -37,7 +38,7 @@ Input:  fn  -> Function whose Usage is to be printed
         cmd -> The way the function was called
 Return: The function always returns -1.
 -----------------------------------------------------------------------------*/
-int printUsage(string cmd)
+static int printUsage(string cmd)
 {
     const Function *fn = findFunction(cmd);
     if(!fn)
@@ -56,7 +57,7 @@ Input:  num -> String to be converted to int
         ans -> Location to put the answer (number of the conversion)
 Return: On success, the function returns 0. Otherwise, -1.
 -----------------------------------------------------------------------------*/
-int stringToInt(string num, int *ans)
+static int stringToInt(string num, int *ans)
 {
     try
     {
@@ -78,7 +79,7 @@ Input:  path -> Path to the file/dir to be created or opened
 Return: On success, the function returns the file handle (> 0).
         On failure, the function returns a negative number.
 -----------------------------------------------------------------------------*/
-int getHandle(string path, bool dir, bool crt)
+static int getHandle(string path, bool dir, bool crt)
 {
     char buffer[MAX_PATH_SIZE];
     strncpy(buffer, path.c_str(), sizeof(buffer));
@@ -99,7 +100,7 @@ Input:  handle -> Handle of the file/dir to be closed
 Return: On success, the function returns 0.
         On failure, the function returns != 0.
 -----------------------------------------------------------------------------*/
-int closeFile(int handle, bool dir)
+static int closeFile(int handle, bool dir)
 {
     int res = dir ? closedir2(handle) : close2(handle);
     if(res != 0)
@@ -116,7 +117,7 @@ Input:  path -> Path to the file/dir to be deleted
 Return: On success, the function returns 0.
         On failure, the function returns != 0.
 -----------------------------------------------------------------------------*/
-int deleteFile(string path, bool dir)
+static int deleteFile(string path, bool dir)
 {
     char buffer[MAX_PATH_SIZE];
     strncpy(buffer, path.c_str(), sizeof(buffer));
@@ -136,7 +137,7 @@ Input:  handle -> Handle of the file to be read from
 Return: On success, the function returns the number of bytes read.
         On failure, the function returns a negative number.
 -----------------------------------------------------------------------------*/
-int readBytes(int handle, char *buffer, int len)
+static int readBytes(int handle, char *buffer, int len)
 {
     int res = read2(handle, buffer, len);
     if(res < 0)
@@ -154,7 +155,7 @@ Input:  handle -> Handle of the file to be written to
 Return: On success, the function returns the number of bytes written.
         On failure, the function returns a negative number.
 -----------------------------------------------------------------------------*/
-int writeBytes(int handle, char *buffer, int len)
+static int writeBytes(int handle, char *buffer, int len)
 {
     int res = write2(handle, buffer, len);
     if(res < 0)
@@ -170,7 +171,7 @@ Input:  buffer  -> Buffer that holds the data to be printed
         len     -> Data bytes to be printed
         counter -> Start of numbering
 -----------------------------------------------------------------------------*/
-void hexDump(char *buffer, int len, int counter)
+static void hexDump(char *buffer, int len, int counter)
 {
     for(int i=0; i<len; i+=16)
     {
@@ -189,6 +190,36 @@ void hexDump(char *buffer, int len, int counter)
             printf("%c", printable(i+j < len ? buffer[i+j] : ' '));
         printf("|\n");
     }
+}
+
+
+/*-----------------------------------------------------------------------------
+Funct:  Auxiliary function to be used to cleanup FSCP function.
+        This function should be called to return from the FSCP function. If
+            resources haven't been allocated yet, the handle and fp arguments
+            should be 0, indicating that there's no need to clean them up.
+        This function also accepts an error message, in case of a condition
+            that prompts the FSCP function to be terminated.
+Input:  ret    -> Value to be returned
+        handle -> T2FS file handle to be closed
+        fp     -> HostFS file handle to be closed
+        fmt    -> Format message to be set
+        ...    -> Arguments to format message
+Return: This function always return the ret parameter.
+-----------------------------------------------------------------------------*/
+static int fscp_cleanup(int ret, int handle, FILE *fp, const char *fmt, ...)
+{
+    if(handle > 0)
+        closeFile(handle, false);
+    if(fp)
+        fclose(fp);
+    char buffer[4096];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    error_msg = buffer + error_msg;
+    return ret;
 }
 
 
@@ -417,7 +448,7 @@ DECL_FUNC(FN_FSCP)
     if(args.size() != 4)
         return printUsage(args[0]);
     bool fromT2FS;
-    int handle;
+    int handle = 0;
     FILE *fp = 0;
     // Setup
     if(args[1] == "-f") // T2FS to HostFS
@@ -427,26 +458,25 @@ DECL_FUNC(FN_FSCP)
         if(handle < 0)
             return setError(handle, "in T2FS, ");
         if(access(args[3].c_str(), F_OK) != -1)
-            return setError(-1, "%s already exists in HostFS", args[3].c_str());
+            return fscp_cleanup(-1, handle, fp, "%s already exists in HostFS", args[3].c_str());
         fp = fopen(args[3].c_str(), "wb");
         if(!fp)
-            return setError(-1, "Couldn't create %s in HostFS", args[3].c_str());
+            return fscp_cleanup(-1, handle, fp, "could not create %s in HostFS", args[3].c_str());
     }
     else if(args[1] == "-t") // HostFS to T2FS
     {
         fromT2FS = false;
         fp = fopen(args[2].c_str(), "rb");
         if(!fp)
-            return setError(-1, "Couldn't open %s in HostFS", args[2].c_str());
+            return setError(-1, "could not open %s in HostFS", args[2].c_str());
         handle = getHandle(args[3], false, true);
         if(handle < 0)
-            return setError(handle, "in T2FS, ");
+            return fscp_cleanup(handle, 0, fp, "in T2FS, ");
     }
     else
         return setError(-1, "%s: invalid option", args[1].c_str());
 
     // Transfer
-    int bytes = 0;
     for(;;)
     {
         char buffer[1024];
@@ -458,10 +488,10 @@ DECL_FUNC(FN_FSCP)
             res_r = fread(buffer, 1, sizeof(buffer), fp);
         // Read validation
         if(res_r < 0)
-            return setError(res_r, "error while reading %s file %s",
-                            fromT2FS ? "T2FS" : "HostFS", args[2].c_str());
-        if(res_r > sizeof(buffer))
-            return setError(res_r, "extraneous value returned by read function");
+            return fscp_cleanup(res_r, handle, fp, "error while reading %s file %s",
+                                fromT2FS ? "T2FS" : "HostFS", args[2].c_str());
+        if(res_r > (int)sizeof(buffer))
+            return fscp_cleanup(res_r, handle, fp, "extraneous value returned by read function");
         if(res_r == 0) break; // No more bytes to transfer
         // Write
         if(fromT2FS)
@@ -470,15 +500,16 @@ DECL_FUNC(FN_FSCP)
             res_w = writeBytes(handle, buffer, res_r);
         // Write validation
         if(res_w < 0)
-            return setError(res_w, "error while writing %s file %s",
-                            fromT2FS ? "HostFS" : "T2FS", args[3].c_str());
+            return fscp_cleanup(res_w, handle, fp, "error while writing %s file %s",
+                                fromT2FS ? "HostFS" : "T2FS", args[3].c_str());
         if(res_w > res_r)
-            return setError(res_w, "extraneous value returned by write function");
+            return fscp_cleanup(res_w, handle, fp, "extraneious value returned by write function");
         if(res_w != res_r)
-            return setError(-1, "could not copy the entire file");
-        if(res_w < sizeof(buffer)) break; // No more bytes to transfer
+            return fscp_cleanup(-1, handle, fp, "could not copy the entire file");
+        if(res_w < (int)sizeof(buffer)) break; // No more bytes to transfer
     }
-    return 0;
+
+    return fscp_cleanup(0, handle, fp, ""); // Success cleanup
 }
 
 DECL_FUNC(FN_LN)
