@@ -54,6 +54,7 @@ enum functions // Functions in the terminal
     FN_RM,
     FN_RMDIR,
     FN_SEEK,
+    FN_SETVAR,
     FN_TRUNC,
     FN_WHO,
     FN_WRITE,
@@ -80,6 +81,7 @@ DECL_FUNC(FN_READ);
 DECL_FUNC(FN_RM);
 DECL_FUNC(FN_RMDIR);
 DECL_FUNC(FN_SEEK);
+DECL_FUNC(FN_SETVAR);
 DECL_FUNC(FN_TRUNC);
 DECL_FUNC(FN_WHO);
 DECL_FUNC(FN_WRITE);
@@ -140,6 +142,9 @@ const std::map<int,Function> fn_lst =
     ADD_TO_MAP(FN_SEEK,   "%s handle offset",
                           "Change current pointer to offset in an opened file, given its handle\n" \
                           "An offset of -1 puts the current pointer at EOF (end of file)"),
+    ADD_TO_MAP(FN_SETVAR, "%s variable",
+                          "Set the variable to the value returned by the previous command\n" \
+                          "To refer to a variable set, use a dollar sign before its name"),
     ADD_TO_MAP(FN_TRUNC,  "%s handle",
                           "Truncate an opened file at its current pointer, given its handle\n" \
                           "Truncation deletes all data from (and including) the current pointer"),
@@ -174,6 +179,7 @@ const std::map<std::string,int> cmd_lst =
     {"rm", FN_RM}, {"del", FN_RM},
     {"rmdir", FN_RMDIR},
     {"seek", FN_SEEK},
+    {"setvar", FN_SETVAR},
     {"trunc", FN_TRUNC},
     {"who", FN_WHO}, {"id", FN_WHO},
     {"write", FN_WRITE},

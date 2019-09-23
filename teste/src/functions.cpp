@@ -679,6 +679,14 @@ DECL_FUNC(FN_SEEK)
     return 0;
 }
 
+DECL_FUNC(FN_SETVAR)
+{
+    if(args.size() != 2)
+        return printUsage(args[0]);
+    variables[args[1]] = last_status;
+    return 0;
+}
+
 DECL_FUNC(FN_TRUNC)
 {
     if(args.size() != 2)

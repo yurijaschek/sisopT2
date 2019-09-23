@@ -35,15 +35,10 @@ enum keys
     KEY_BACKSPACE = 127,
     // Escaped sequences
     KEY_DELETE = 256, // Arbitrarily chosen (> 255)
-    KEY_HOME,
-    KEY_END,
-    KEY_CTRL_DEL,
     KEY_UP,
     KEY_DOWN,
     KEY_RIGHT,
     KEY_LEFT,
-    KEY_CTRL_LEFT,
-    KEY_CTRL_RIGHT,
 };
 
 static inline int KEY_CTRL(const char k)
@@ -125,11 +120,9 @@ Return: The corresponding int code, according to 'keys' enum.
 -----------------------------------------------------------------------------*/
 static int getEscSequence(char *buffer)
 {
-#if 0
-    int n = strlen(buffer);
-    for(int i=0; i<n; i++)
-        printf("%d\n", buffer[i]);
-#endif
+    // for(char *ch=buffer; *ch; ch++)
+    //     fprintf(stderr, "%d\n", *ch);
+
     if(strcmp(buffer, "\e[A") == 0)
         return KEY_UP;
     if(strcmp(buffer, "\e[B") == 0)
@@ -140,7 +133,7 @@ static int getEscSequence(char *buffer)
         return KEY_LEFT;
     if(strcmp(buffer, "\e[3~") == 0)
         return KEY_DELETE;
-    return KEY_NONE;
+    return KEY_NONE; // No known escape sequence
 }
 
 
@@ -227,6 +220,8 @@ static string getCommandLine()
     static vector<string> history; // Terminal commands history
     // To preserve history entries, since they can be modified in-place
     map<int,string> original;
+    if(history.size() == 128) // Just keep the last 128 commands
+        history.erase(history.begin());
     history.push_back(""); // New entry for this prompt
     const int len = history.size();
     int hist_idx = len-1, word_idx = 0;
@@ -322,12 +317,22 @@ static string getCommandLine()
     string ans = history[hist_idx];
     for(auto it=original.begin(); it!=original.end(); it++)
         history[it->first] = it->second;
-    history[len-1] = ans;
+    history[len-1] = ans; // In case the user repeated a command
     if(history[len-1] == "" || (len > 1 && history[len-1] == history[len-2]))
-        history.pop_back();
+        history.pop_back(); // No empty commands or repetition in sequence
     printf("\n");
+    fflush(stdout); // So user
     return ans;
 }
+
+
+bool interactive;
+char user_info[] = "user";
+char host_info[] = "t2fs";
+string cwd_path = "/";
+string error_msg;
+int last_status = 0;
+map<string,int> variables;
 
 
 /*-----------------------------------------------------------------------------
@@ -343,17 +348,18 @@ static vector<string> parseCommandLine(string line)
     stringstream ss(line);
     string arg;
     while(ss >> arg)
-        ans.push_back(arg);
+    {
+        if(arg[0] == '$' && arg.size() > 1)
+        {
+            auto it = variables.find(arg.substr(1));
+            if(it != variables.end())
+                ans.push_back(to_string(it->second));
+        }
+        else
+            ans.push_back(arg);
+    }
     return ans;
 }
-
-
-bool interactive;
-char user_info[] = "user";
-char host_info[] = "t2fs";
-string cwd_path = "/";
-string error_msg;
-int exit_status = 0;
 
 
 int setError(int err, const char *fmt, ...)
@@ -443,12 +449,13 @@ int main()
             continue;
         }
 
-        exit_status = fn->fn(args); // Call the function
+        int exit_status = fn->fn(args); // Call the function
         if(exit_status != 0 && error_msg != "") // Error
         {
             printf("%s returned status %d: %s\n", args[0].c_str(), exit_status,
                                                   error_msg.c_str());
         }
+        last_status = exit_status;
 
         if(fn->fn == FUNC_NAME(FN_EXIT))
             break;

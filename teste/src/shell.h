@@ -11,6 +11,7 @@
 #ifndef SHELL_H
 #define SHELL_H
 
+#include <map>
 #include <string>
 
 struct Function;
@@ -24,6 +25,7 @@ extern char user_info[];
 extern char host_info[];
 extern std::string cwd_path;
 extern std::string error_msg;
-extern int exit_status;
+extern int last_status;
+extern std::map<std::string,int> variables;
 
 #endif // SHELL_H
