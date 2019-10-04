@@ -63,7 +63,7 @@ static int stringToInt(string num, int *ans)
     {
         *ans = stoi(num);
     }
-    catch(const invalid_argument&)
+    catch(const exception& e)
     {
         return setError(-1, "%s: not an integer", num.c_str());
     }

@@ -3,7 +3,7 @@ CXX=g++
 OBJ_DIR=./obj
 SRC_DIR=./src
 
-CPPFLAGS := -std=c++11 -Wall -Wextra
+CPPFLAGS := -std=c++0x -Wall -Wextra
 
 SHELL_SRCS := $(wildcard $(SRC_DIR)/*.cpp)
 SHELL_OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(OBJ_DIR)/%.o,$(SHELL_SRCS))
